@@ -1,0 +1,25 @@
+Name	Link	Gender
+Marvel	https://i.imgur.com/gcAbb5A	1
+Glimmer	https://i.imgur.com/JgiO6zy	0
+Cato	https://i.imgur.com/HGgFfk1	1
+Clove	https://i.imgur.com/XDCXI9Q	0
+District 3 Male	https://i.imgur.com/fBMypyN	1
+District 3 Female	https://i.imgur.com/QAUnZmP	0
+District 4 Male	https://i.imgur.com/BPNKgwh	1
+District 4 Female	https://i.imgur.com/AkaxMyh	0
+District 5 Male	https://i.imgur.com/G02bAVl	1
+Foxface	https://i.imgur.com/v57OfpY	0
+Jason	https://i.imgur.com/ZR8Up3U	1
+District 6 Female	https://i.imgur.com/nqY7VFt	0
+District 7 Male	https://i.imgur.com/9OqFcig	1
+District 7 Female	https://i.imgur.com/X9NgVCL	0
+District 8 Male	https://i.imgur.com/hh600sh	1
+District 8 Female	https://i.imgur.com/FZA85dy	0
+District 9 Male	https://i.imgur.com/w64AjJb	1
+District 9 Female	https://i.imgur.com/7jMPqM4	0
+District 10 Male	https://i.imgur.com/oztDvTg	1
+District 10 Female	https://i.imgur.com/KbnoUrw	0
+Rue	https://i.imgur.com/jlpXUMP	0
+Thresh	https://i.imgur.com/O9kgTfO	1
+Peeta	https://i.imgur.com/bVM3cWg	1
+Katniss	https://i.imgur.com/Ht7XO6T	0
