@@ -1,5 +1,5 @@
 # Discord-Hunger-Games
-Discord Bot that runs a mock Hunger Games competition between users entries. 
+Discord Bot that runs a mock Hunger Games competition between custom champions.  
 
 Based on the hunger games simulator http://brantsteele.net/hungergames/reaping.php
 
