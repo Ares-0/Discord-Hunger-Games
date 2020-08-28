@@ -3,8 +3,6 @@ Discord Bot that runs a mock Hunger Games competition between users entries.
 
 Based on the hunger games simulator http://brantsteele.net/hungergames/reaping.php
 
-&nbsp;
-
 Traditionally, between 24 and 48 champions are entered into the games.  
 An **event** is a notable occurance that consists of 1 or more champions.  
 A **round** is a number of events such that every champion has participated.  
@@ -53,10 +51,10 @@ Instead of hardcoding names, "Text" requires champions to be referred to by numb
 The same is true of pronouns: (they1), (them2), etc.  
 
 Examples:  
-Bloodbath		2	    	None		None	(Player1) and (Player2) fight for a bag. (Player1) gives up and retreats.  
-Feast	2				Player2		Player1		(Player1) is slashed by (Player2) as (they1) was reaching for a weapon. (they1) eventually bleeds out.  
-Night	      1				None		Player1		 (Player1) dies from hunger.  
-Night	      2				Player1		Player2		 (Player1) sets an explosive off, killing (Player2).  
+Bloodbath&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp;&nbsp;None&nbsp;&nbsp;&nbsp;None&nbsp;&nbsp;&nbsp;(Player1) and (Player2) fight for a bag. (Player1) gives up and retreats.  
+Feast&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp;&nbsp;Player2&nbsp;&nbsp;&nbsp;Player1&nbsp;&nbsp;&nbsp;(Player1) is slashed by (Player2) as (they1) was reaching for a weapon. (they1) eventually bleeds out.  
+Night&nbsp;&nbsp;&nbsp;1&nbsp;&nbsp;&nbsp;None&nbsp;&nbsp;&nbsp;Player1&nbsp;&nbsp;&nbsp;(Player1) dies from hunger.  
+Night&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp;&nbsp;Player1&nbsp;&nbsp;&nbsp;Player2&nbsp;&nbsp;&nbsp;(Player1) sets an explosive off, killing (Player2).  
 
 ### External Libraries
 discord.py  
@@ -67,21 +65,22 @@ Pillow
 The following are the commands users will type to order the bot.  
 The default command prefix is '$'.
 
-### start
+### $start
 Performs setup work, including importing from the cast and events files, downloading the champions images, and preping data structures.
 
-### advance \<n>
+### $advance \<n>
 Displays n number of events, or 1 event if no argument is provided.     
-If n exceeds the number of events left in the current round, only the events left will be displayed. 
+![Events](https://i.imgur.com/joTBpN8.png "Events")  
+If n exceeds the number of events left in the current round, only the events left will be displayed.  
 
-### run \<n>
+### $run \<n>
 Automatically starts a game and runs it to completion. If a numerical argument is specified, that many games will be run.  
 Mostly for debugging. 
 
-### alive
-Prints a gallery of champions who are still alive
-
-### dead
-Prints a gallery of champions who have died
-
+### $alive
+Prints a gallery of champions who are still alive  
+![Alive](https://i.imgur.com/7yNsJ2S.png "Alive")  
+### $dead
+Prints a gallery of champions who have died  
+![Dead](https://i.imgur.com/DPiRBVy.png "Dead")  
 
