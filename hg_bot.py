@@ -57,7 +57,7 @@ class Champion:
 		self.image_link = str(image + "s.png")			# NOTE discord.py does NOT like the b, l, t, m, etc extensions on imgur
 		self.gender = gender
 		self.status = status
-		self.thumnail = None
+		self.thumbnail = None
 	def about(self):
 		print("\n" + self.name + "\n\t" + self.image_link + 
 		    "\n\t" + self.gender.name + "\n\t" + self.status.name)
@@ -412,10 +412,16 @@ def import_list_of_champions():
 	
 	line = f.readline()	# eat first line
 	line = f.readline()
-	while(len(line) > 0):
+	while(len(line) > 1):
 		#work
 		x = line.split("\t")
-		new_champ = Champion(x[0].strip(), x[1], Gender(int(x[2])), Status(0))
+		
+		# if the .png is there, remove it. Later operations require it to not be there
+		link = x[1]
+		if(x[1][-4:] == ".png"):
+			link = link[:-4]
+
+		new_champ = Champion(x[0].strip(), link, Gender(int(x[2])), Status(0))
 		champions.add_champion(new_champ)
 		imported += 1
 		
@@ -483,9 +489,6 @@ async def download_images(champs_list):
 				if resp.status != 200:
 					return await context.send('Could not download file...')
 				data = io.BytesIO(await resp.read())
-				#im = Image.open(data)
-				#im = Image.frombuffer("F", (90, 90), data, "raw", "F;16")
-				#im.save(x.name + ".png")
 				x.set_thumbnail(data)
 	#for x in champs_list:
 	#	await context.send(file=discord.File(x.thumbnail, x.name + '.png'))
