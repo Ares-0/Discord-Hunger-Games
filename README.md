@@ -8,6 +8,9 @@ An **event** is a notable occurance that consists of 1 or more champions.
 A **round** is a number of events such that every champion has participated.  
 Rounds alternate between day and night (and sometimes special events) until one champion remains, who is declared the winner.
 
+When 8 champions are remaining, users can begin supporting champions they want to win by adding discord reactions to events with that champion.  
+Sponsorships will slightly decrease the chances that said champions next event is fatal.  
+
 # Files
 ### badbot.py
 Contains most of the discord interface. All user commands are handled in this file, then passed on to hg_bot.  
