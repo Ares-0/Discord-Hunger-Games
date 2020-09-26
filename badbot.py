@@ -101,6 +101,14 @@ async def quit(ctx):
 	print("done.")
 
 @bot.command()
+async def reset(ctx):
+	if(not await check_channel(ctx) or not await check_gm(ctx)):
+		return
+	wipe()
+	emoji = '✅'
+	await ctx.message.add_reaction(emoji)
+
+@bot.command()
 async def alive(ctx):
 	if(not await check_channel(ctx)):
 		return
@@ -136,10 +144,11 @@ async def run(ctx, *args):
 async def on_reaction_add(reaction, user):
 	if(user == bot.user):		# if bot is reacting, ignore
 		return
-	if(reaction.message.author is not bot.user):	# if message isn't bot message, ignore
+
+	if(reaction.message.author.id != bot.user.id):	# if message isn't bot message, ignore
 		return
 	
-	if(reaction.message.channel.id == HG_CHANNEL):		# if message is in HG channel
+	if(reaction.message.channel.id in HG_CHANNEL):		# if message is in HG channel
 		process_reaction(reaction.message.embeds[0].title, user)
 
 # Check permissions of both channel and author

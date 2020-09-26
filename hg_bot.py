@@ -406,7 +406,7 @@ acting_champions = []
 # Other?
 current_type = EventType.Bloodbath
 context = None
-import_limit = 48		# for testing, arbitrarily limit the number of champions to import
+import_limit = 24		# for testing, arbitrarily limit the number of champions to import OLD
 # should some of this go into a class? YES!
 
 #		PREP FUNCTIONS
@@ -469,6 +469,8 @@ def import_list_of_champions():
 	
 	print("Importing champions...")
 	line = f.readline()	# eat first line
+	line = f.readline() # get #entries value
+	entries = int(line[:-1])
 	line = f.readline()
 	while(len(line) > 1):
 		#work
@@ -484,7 +486,8 @@ def import_list_of_champions():
 		imported += 1
 		
 		# prep next iteration
-		if(imported >= import_limit):
+		#if(imported >= import_limit):	OLD
+		if(imported >= entries):
 			break
 		line = f.readline()
 	
@@ -891,16 +894,16 @@ def wipe():
 	# .clear() or None?
 	global champions
 	global events
-	global thumbnails
 	global newly_dead
 	global acting_champions
+	global imported
 
-	champions = None
-	events = None
-	thumbnails = None
+	champions.clear_roster()
+	events.clear()
 
-	newly_dead = None
-	acting_champions = None
+	newly_dead.clear()
+	acting_champions.clear()
+	imported = False
 
 # return game_over
 def check_over():
