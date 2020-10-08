@@ -35,8 +35,8 @@ class Data:
 	# these temp measures aren't going to scale at all.
 	def write(self):
 		members = [attr for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")]
-		print(members)
-		print(data)
+		#print(members)
+		#print(data)
 
 		f = open("data", "w")
 		for x in members:
@@ -73,7 +73,7 @@ async def advance(ctx, *args):
 		n = int(args[0])
 	async with ctx.typing():
 		await advance_n(n)
-	await context.message.delete()
+	#await context.message.delete()
 
 @bot.command()
 async def start(ctx):
@@ -148,8 +148,26 @@ async def on_reaction_add(reaction, user):
 	if(reaction.message.author.id != bot.user.id):	# if message isn't bot message, ignore
 		return
 	
+	sup = 0
 	if(reaction.message.channel.id in HG_CHANNEL):		# if message is in HG channel
-		process_reaction(reaction.message.embeds[0].title, user)
+		sup = process_reaction(reaction.message.embeds[0].title, user)
+	
+	if sup <= 10:
+		# remove previous number
+		for x in reaction.message.reactions:
+			if x.me:
+				await x.remove(bot.user)
+		# apply new number
+		emoji_nums = [' ', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'] # 0 technically never used
+		sup = min(sup, 10)
+		await reaction.message.add_reaction(emoji_nums[sup])
+	elif sup == 11:
+		for x in reaction.message.reactions:
+			if x.me:
+				await x.remove(bot.user)
+		await reaction.message.add_reaction('🔟')
+		await reaction.message.add_reaction('➕')
+	# do nothing for 12+
 
 # Check permissions of both channel and author
 @bot.command()
@@ -207,6 +225,8 @@ async def gw(ctx, *args):
 	else:
 		data.GW_link = args[0]
 		data.write()
+		emoji = '✅'
+		await ctx.message.add_reaction(emoji)
 
 @bot.command()
 async def choose(ctx, *args):

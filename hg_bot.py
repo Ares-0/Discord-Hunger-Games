@@ -275,8 +275,9 @@ class Reactions:
 
 		# increment the count for this message / user combo, but not higher than 3
 		count = self.reactions[idx_c][idx_u]
-		if(count < 3):
+		if(count < 15):
 			self.reactions[idx_c][idx_u] = self.reactions[idx_c][idx_u] + 1
+		return sum(self.reactions[idx_c])	# return the total number of support
 	
 	def about(self):
 		count = 0
@@ -293,7 +294,7 @@ class Reactions:
 		
 	def get_fatal_chance(self, champ):
 		global params
-		SPONSOR_WEIGHT = 0.5
+		SPONSOR_WEIGHT = 0.35	# chosen by survey
 		print(champ.name)
 
 		# two aspects to this
@@ -691,7 +692,6 @@ async def run_event(acting_list, type):
 	# TODO
 	# give 'killers' a point
 	
-
 # Check if one champion is left, and announce if so
 async def check_for_winner():
 	global champions
@@ -744,7 +744,7 @@ async def send_embed(arg, image_url, rgb):
 	
 	await context.send(embed=embedVar)
 
-# send newly dead embed (vertical stitch)
+# send newly dead embed
 async def send_newly_dead():
 	global newly_dead
 	global context
@@ -759,12 +759,17 @@ async def send_newly_dead():
 	embedVar = discord.Embed(title=e_title, color=0x0000ff)
 
 	if(num > 0):
-		im_final = Image.new("RGBA", (90, 90*num + 4*(num-1)))
+		ROWS = 4
+		final_x = 90*ROWS + 4*(ROWS-1)
+		final_y = 94*(int(((num-1) / ROWS))+1)
+		im_final = Image.new("RGBA", (final_x, final_y))
 		i = 0
 		for x in newly_dead:
 			im = Image.open(x.thumbnail)
 			im = im.convert('LA')
-			im_final.paste(im, (0, 94*i))
+			x = 94*int(i%ROWS)
+			y = 94*int(i/ROWS)
+			im_final.paste(im, (x, y))
 			im.close()
 			i += 1
 		im_final.save("final.png")
@@ -774,8 +779,6 @@ async def send_newly_dead():
 	else:
 		await context.send(embed=embedVar)
 
-	#await context.send(embed=embedVar)
-	#await context.send(file=discord.File("final.png", x.name + '.png'))
 	newly_dead.clear()
 	
 # combine and send the thumbnails of every champion involved in an event (horizontal stitch)
@@ -866,14 +869,14 @@ async def send_gallery(mode, *args):
 
 #		SPONSOR FUNCTIONS
 
-def process_reaction(message, user):
+def process_reaction(message_title, user):
 	global reactions
 	global champions
-	msg = message
-
-	print("react!")
+	msg = message_title
+	out = 0
 	alive = champions.get_list_alive()
-	#print(msg)
+	print("react!")
+
 	names = re.search(r"\"[^\"]*\"", msg)	# v1: 	"\"\w*\""		v2: "\".*\""
 	while(names):
 		x = names[0]
@@ -881,11 +884,12 @@ def process_reaction(message, user):
 		for y in alive:
 			n = x.strip("\"")
 			if y.name == n:
-				reactions.add_reaction(y, user)
+				out = reactions.add_reaction(y, user)
 				break
 		msg = msg.replace(x, " ")
 		names = re.search(r"\"[^\"]*\"", msg)
 	reactions.about()
+	return out		# return amount of support on msg
 
 #		OTHER
 
