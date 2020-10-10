@@ -5,6 +5,10 @@ import random
 import asyncio
 import io
 import aiohttp
+import math
+from datetime import datetime
+from PIL import Image
+from PIL import ImageEnhance
 import badbot_info # this file is local to my computer and has my token and username. Manually enter yours below.
 
 # I'd rather not import all just yet
@@ -137,6 +141,8 @@ async def run(ctx, *args):
 		await prep_game(ctx)
 		while(not check_over()):
 			await advance_n(100)
+		if(1==0):
+			print(x)
 	print("batch done")
 	await ctx.send("batch done, {0}".format(ctx.author.mention))
 
@@ -152,7 +158,7 @@ async def on_reaction_add(reaction, user):
 	if(reaction.message.channel.id in HG_CHANNEL):		# if message is in HG channel
 		sup = process_reaction(reaction.message.embeds[0].title, user)
 	
-	if sup <= 10:
+	if sup <= 10 and sup > 0:
 		# remove previous number
 		for x in reaction.message.reactions:
 			if x.me:
@@ -168,6 +174,7 @@ async def on_reaction_add(reaction, user):
 		await reaction.message.add_reaction('🔟')
 		await reaction.message.add_reaction('➕')
 	# do nothing for 12+
+	# do nothing for -1
 
 # Check permissions of both channel and author
 @bot.command()
@@ -202,18 +209,22 @@ async def check_gm(ctx):
 
 #####################################################################
 
+# Prints a link to the source code on github
 @bot.command()
 async def source(ctx):
 	await ctx.send("https://github.com/Ares-0/Discord-Hunger-Games")
 
+# Repeats the argument given
 @bot.command()
 async def echo(ctx, *args):
 	await ctx.send(' '.join(args))
 
+# Says hi
 @bot.command()
 async def hello(ctx):
 	await ctx.send("Hello, {0}".format(ctx.author.mention))
 
+# Saves or prints the saved gw schedule
 @bot.command()
 async def gw(ctx, *args):
 	global data
@@ -228,6 +239,55 @@ async def gw(ctx, *args):
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)
 
+# Saves or prints the saved gw schedule, but with some color manipulation
+@bot.command()
+async def gw2(ctx, *args):
+	global data
+	if(len(args) < 1):
+		if(data.GW_link is None):
+			await ctx.send("No link saved")
+		else:
+			async with aiohttp.ClientSession() as session:
+				async with session.get(data.GW_link) as resp:
+					if resp.status != 200:
+						return await context.send('Could not download file...')
+					image_data = io.BytesIO(await resp.read())
+			im = Image.open(image_data)
+			
+			#im.size[0]
+			xs = (0, 102, 253, 406, 559, 739, 917, 1069, 1208)		# this is called hard coding
+			dy = 22
+
+			x0, y0, x1, y1 = (0, 0, 100, im.size[1])
+			x0 = xs[datetime.today().weekday()+2]
+			x1 = xs[datetime.today().weekday()+3]
+			
+			now = datetime.now()
+			c = now.hour + now.minute/60
+			slot = math.floor((c-19.5)/0.5)
+			slot = max(slot, 0)
+			y0 = dy*slot + 22
+			
+			crop = im.copy()
+			crop = crop.crop((x0, y0, x1, y1))
+			converter = ImageEnhance.Color(im)
+			im = converter.enhance(0)
+			im.paste(crop, (x0, y0))
+
+			crop.save("crop.png")
+			im.save("gw.png")
+			file=discord.File("gw.png", filename="gw.png")
+			await ctx.send(file=file)
+
+			#file=discord.File("crop.png", filename="crop.png")
+			#await ctx.send(file=file)
+	else:
+		data.GW_link = args[0]
+		data.write()
+		emoji = '✅'
+		await ctx.message.add_reaction(emoji)
+
+
 @bot.command()
 async def choose(ctx, *args):
 	arg = ' '.join(args)
@@ -236,13 +296,16 @@ async def choose(ctx, *args):
 
 	winner = ""
 	for y in x:
-		if("freohr" in y):
+		if("freohr" in y or "nise" in y):
 			winner = y
 			break
 	
 	if(random.random() < 0.5):
 		result = winner
 	await ctx.send(result)
+
+
+
 
 ######################## EXAMPLES ############################## 
 

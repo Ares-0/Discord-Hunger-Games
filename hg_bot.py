@@ -406,6 +406,7 @@ acting_champions = []
 
 # Other?
 current_type = EventType.Bloodbath
+sponsorship = False		# is sponsorship turned on?
 context = None
 import_limit = 24		# for testing, arbitrarily limit the number of champions to import OLD
 # should some of this go into a class? YES!
@@ -557,6 +558,7 @@ async def download_images(champs_list):
 					return await context.send('Could not download file...')
 				data = io.BytesIO(await resp.read())
 				x.set_thumbnail(data)
+				
 	#for x in champs_list:
 	#	await context.send(file=discord.File(x.thumbnail, x.name + '.png'))
 
@@ -586,13 +588,14 @@ async def advance_n(n):
 	if(current_event == 0):			# maybe move to another function
 		global stats
 		global params
+		global sponsorship
 		stats.increment_turn()
 		acting_champions = champions.get_list_alive()
 		random.shuffle(acting_champions)
 		reactions.update_count()
 		
 		# In final 8, start accepting emotes as sponsorship
-		if(not endgame and len(acting_champions) <= 8):
+		if(sponsorship and not endgame and len(acting_champions) <= 8):
 			# print message
 			endgame = True
 			print("final 8")
@@ -657,7 +660,7 @@ async def run_event(acting_list, type):
 	# Get fatal chance of this event
 	num_alive = champions.get_count_alive()
 	
-	if(num_alive <= 8):
+	if(sponsorship and num_alive <= 8):
 		chance = reactions.get_fatal_chance(acting_list[-1])
 	else:
 		chance = params.get_fatal_chance()
@@ -872,6 +875,11 @@ async def send_gallery(mode, *args):
 def process_reaction(message_title, user):
 	global reactions
 	global champions
+	global sponsorship
+
+	if(not sponsorship):		# not sponsoring, move on
+		return -1
+
 	msg = message_title
 	out = 0
 	alive = champions.get_list_alive()
