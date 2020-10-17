@@ -252,6 +252,7 @@ class Reactions:
 	users = []
 	reactions = [[0 for i in range(20)] for j in range(8)]
 	totals = []
+	limit = 3
 
 	def fill_champions(self, champs):
 		self.champions.clear()
@@ -275,7 +276,7 @@ class Reactions:
 
 		# increment the count for this message / user combo, but not higher than 3
 		count = self.reactions[idx_c][idx_u]
-		if(count < 15):
+		if(count < self.limit):
 			self.reactions[idx_c][idx_u] = self.reactions[idx_c][idx_u] + 1
 		return sum(self.reactions[idx_c])	# return the total number of support
 	
@@ -309,7 +310,8 @@ class Reactions:
 		sponsor = 0
 		c = self.get_champ_idx(champ)
 		if(sum(self.totals) != 0):
-			sponsor = self.totals[c] / 3*len(self.users)	# sponsorships given / sponsorships possible
+			sponsor = self.totals[c] / self.limit*len(self.users)	# sponsorships given / sponsorships possible
+			sponsor = max(0, min(1, sponsor))		# keep sponsor in bounds plz
 		
 		last = params.get_fatal_chance() * (1-sponsor*SPONSOR_WEIGHT)
 
@@ -344,7 +346,8 @@ class Params:
 	def update_fatal_chance(self):
 		global champions
 		global current_type
-				
+		global stats
+
 		x = champions.get_count_alive()
 		
 		# y(x) = 0.1*log2(x/10+1)+0.2
@@ -361,6 +364,12 @@ class Params:
 		
 		# apply floor to value
 		self.fatal_chance = max(0.2, self.fatal_chance)
+
+		# increase as rounds continue past 5
+		if(stats.elapsed_turns > 10):
+			self.fatal_chance += 0.025*(stats.elapsed_turns - 10)
+		
+		print(self.fatal_chance)
 
 
 
@@ -406,7 +415,7 @@ acting_champions = []
 
 # Other?
 current_type = EventType.Bloodbath
-sponsorship = False		# is sponsorship turned on?
+sponsorship = True		# is sponsorship turned on?
 context = None
 import_limit = 24		# for testing, arbitrarily limit the number of champions to import OLD
 # should some of this go into a class? YES!
