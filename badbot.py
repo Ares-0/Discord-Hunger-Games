@@ -234,7 +234,8 @@ async def gw(ctx, *args):
 		else:
 			await ctx.send(data.GW_link)
 	else:
-		data.GW_link = args[0]
+		s = args[0].split("?")
+		data.GW_link = s[0]
 		data.write()
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)
@@ -254,26 +255,31 @@ async def gw2(ctx, *args):
 					image_data = io.BytesIO(await resp.read())
 			im = Image.open(image_data)
 			
-			#im.size[0]
 			xs = (0, 102, 253, 406, 559, 739, 917, 1069, 1208)		# this is called hard coding
 			dy = 22
 
+			# get x values (aka day)
 			x0, y0, x1, y1 = (0, 0, 100, im.size[1])
-			x0 = xs[datetime.today().weekday()+2]
-			x1 = xs[datetime.today().weekday()+3]
+			day = datetime.today().weekday() + 0
+			x0 = xs[(day+2)%7]
+			x1 = xs[(day+3)%7]
 			
+			# get y values (aka time)
+			starttime = 19.5		# time of day in CST of first watch
 			now = datetime.now()
 			c = now.hour + now.minute/60
-			slot = math.floor((c-19.5)/0.5)
+			slot = math.floor((c-starttime)/0.5)
 			slot = max(slot, 0)
 			y0 = dy*slot + 22
 			
+			# color operations
 			crop = im.copy()
 			crop = crop.crop((x0, y0, x1, y1))
 			converter = ImageEnhance.Color(im)
 			im = converter.enhance(0)
 			im.paste(crop, (x0, y0))
 
+			# save and post
 			crop.save("crop.png")
 			im.save("gw.png")
 			file=discord.File("gw.png", filename="gw.png")
@@ -282,12 +288,13 @@ async def gw2(ctx, *args):
 			#file=discord.File("crop.png", filename="crop.png")
 			#await ctx.send(file=file)
 	else:
-		data.GW_link = args[0]
+		s = args[0].split("?")
+		data.GW_link = s[0]
 		data.write()
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)
 
-
+# Randomly* selects between given arguments
 @bot.command()
 async def choose(ctx, *args):
 	arg = ' '.join(args)
@@ -304,8 +311,19 @@ async def choose(ctx, *args):
 		result = winner
 	await ctx.send(result)
 
+# i was gonna check all the messages in channels or something
+@bot.command()
+async def collect(ctx, *args):
+	ch = bot.get_channel(764531995861712946)
+	print("working...")
 
-
+	count = 0
+	async for message in ch.history(limit=100):
+		count += 1
+	print(count)
+	
+	
+	print("done")
 
 ######################## EXAMPLES ############################## 
 

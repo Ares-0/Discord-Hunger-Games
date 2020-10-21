@@ -10,6 +10,26 @@ import os
 import math
 from PIL import Image
 
+#		ENUMS
+
+class Gender(IntEnum):
+	NEUTRAL = 2
+	MALE    = 1
+	FEMALE  = 0
+	
+class Status(Enum):
+	ALIVE = 0
+	DEAD = 1
+
+class EventType(IntEnum):
+	Bloodbath = 0
+	Day = 1
+	Night = 2
+	Feast = 3
+	Arena = 4
+	
+	def __str__(self):
+		return self.name
 
 #		CLASSES
 
@@ -63,7 +83,7 @@ class Champions:
 class Champion:
 	def __init__(self, name, image, gender, status):
 		self.name = name
-		self.image_link = str(image + "s.png")			# NOTE discord.py does NOT like the b, l, t, m, etc extensions on imgur
+		self.image_link = str(image + "b.png")			# NOTE discord.py does NOT like the l, t, m, etc extensions on imgur. s seems ok?
 		self.gender = gender
 		self.status = status
 		self.thumbnail = None
@@ -79,32 +99,18 @@ class Champion:
 
 # Collected lists of all events
 class Events:
-	events_structure = [[[] for j in range(5)] for i in range(2)]
+	events_structure = [[[] for j in range(len(EventType))] for i in range(2)]
 	# structure of all events in game
 	# events_structure[Is_Fatal][EventType] has list of events matching appropraite Is_Fatal and EventType
 
 	def about(self):
-		lens = []
-		for x in self.events_structure[0]:
-			lens.append(len(x))
-		print("Harmless:")
+		print("\nHarmless")
+		for t in EventType:
+			print('# of ' + t.name + ' Events: ' + str(len(self.events_structure[0][t])))
 
-		print("# of BloodbathEvents: " + str(lens[0]))
-		print("# of DayEvents: "       + str(lens[1]))
-		print("# of NightEvents: "     + str(lens[2]))
-		print("# of FeastEvents: "     + str(lens[3]))
-		print("# of ArenaEvents: "     + str(lens[4]))
-		print()
-
-		lens.clear()
-		for x in self.events_structure[1]:
-			lens.append(len(x))
-		print("Fatal")
-		print("# of BloodbathEvents: " + str(lens[0]))
-		print("# of DayEvents: "       + str(lens[1]))
-		print("# of NightEvents: "     + str(lens[2]))
-		print("# of FeastEvents: "     + str(lens[3]))
-		print("# of ArenaEvents: "     + str(lens[4]))
+		print("\nFatal")
+		for t in EventType:
+			print('# of ' + t.name + ' Events: ' + str(len(self.events_structure[1][t])))
 		print()
 	
 	def get_type_list(self, type, fatal):
@@ -365,34 +371,13 @@ class Params:
 		# apply floor to value
 		self.fatal_chance = max(0.2, self.fatal_chance)
 
-		# increase as rounds continue past 5
+		# increase as rounds continue past day 5
 		if(stats.elapsed_turns > 10):
 			self.fatal_chance += 0.025*(stats.elapsed_turns - 10)
 		
 		print(self.fatal_chance)
 
 
-
-#		ENUMS
-
-class Gender(IntEnum):
-	NEUTRAL = 2
-	MALE    = 1
-	FEMALE  = 0
-	
-class Status(Enum):
-	ALIVE = 0
-	DEAD = 1
-
-class EventType(IntEnum):
-	Bloodbath = 0
-	Day = 1
-	Night = 2
-	Feast = 3
-	Arena = 4
-	
-	def __str__(self):
-		return self.name
 
 #		GLOBALS
 
@@ -417,7 +402,6 @@ acting_champions = []
 current_type = EventType.Bloodbath
 sponsorship = True		# is sponsorship turned on?
 context = None
-import_limit = 24		# for testing, arbitrarily limit the number of champions to import OLD
 # should some of this go into a class? YES!
 
 #		PREP FUNCTIONS
@@ -461,16 +445,16 @@ async def import_all():
 	champions = Champions()
 	events = Events()
 
-	import_list_of_champions()
 	import_list_of_events()
-	await download_images(champions.roster)
-
 	events.about()
+	import_list_of_champions()
+	await download_images(champions.roster)
+	print("done")
+
 
 # get list of champions from file
 def import_list_of_champions():
 	global champions
-	global import_limit
 	imported = 0
 	filename = "hg_files/cast_in.txt"
 	path = os.path.dirname(__file__)
@@ -497,7 +481,6 @@ def import_list_of_champions():
 		imported += 1
 		
 		# prep next iteration
-		#if(imported >= import_limit):	OLD
 		if(imported >= entries):
 			break
 		line = f.readline()
@@ -617,18 +600,17 @@ async def advance_n(n):
 			reactions.about()
 
 		# decide round type
+		# TODO: ADD FEAST to day 5
+		# TODO: ADD random major events
 		if(current_turn == 0):
 			current_type = EventType.Bloodbath
 			text = "Bloodbath"
-			print(text)
-			record("\n" + text+ "\n")
-			await send_embed(text, None, 0x0000ff)
 		else:
 			current_type = EventType((current_turn+1)%2 + 1)		# alternate day and night with day being first
 			text = str(current_type).upper() + " " + str(int((current_turn+1)/2)) 
-			print(text)
-			record("\n" + text+ "\n")
-			await send_embed(text, None, 0x0000ff)
+		print(text)
+		record("\n" + text+ "\n")
+		await send_embed(text, None, 0x0000ff)
 		
 		# TODO
 		# Add cornocopia event on day 4(?) and random big events throughout
@@ -769,18 +751,24 @@ async def send_newly_dead():
 	print(e_title)
 	record(e_title + "\n")
 	embedVar = discord.Embed(title=e_title, color=0x0000ff)
+	if(num > 0):
+		embedVar.set_footer(text='Press \'f\' to pay respects')
 
 	if(num > 0):
-		ROWS = 4
-		final_x = 90*ROWS + 4*(ROWS-1)
-		final_y = 94*(int(((num-1) / ROWS))+1)
+		im = Image.open(newly_dead[0].thumbnail)
+		thumb_x, thumb_y = im.size[0], im.size[1]
+		COLS = 4
+
+		COLS = min(COLS, num)	# if less have died than there are columns, don't need the extras
+		final_x = thumb_x*COLS + 4*(COLS-1)
+		final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
 		im_final = Image.new("RGBA", (final_x, final_y))
 		i = 0
 		for x in newly_dead:
 			im = Image.open(x.thumbnail)
 			im = im.convert('LA')
-			x = 94*int(i%ROWS)
-			y = 94*int(i/ROWS)
+			x = (thumb_x+4)*int(i%COLS)
+			y = (thumb_y+4)*int(i/COLS)
 			im_final.paste(im, (x, y))
 			im.close()
 			i += 1
@@ -792,7 +780,7 @@ async def send_newly_dead():
 		await context.send(embed=embedVar)
 
 	newly_dead.clear()
-	
+
 # combine and send the thumbnails of every champion involved in an event (horizontal stitch)
 async def send_event_image(event_champs, msg, color):
 	global endgame
@@ -801,14 +789,16 @@ async def send_event_image(event_champs, msg, color):
 		print("Error, no context yet")
 		return
 	
+	im = Image.open(event_champs[0].thumbnail)
+	x, y = im.size[0], im.size[1]
 	num = len(event_champs)
-	im_final = Image.new("RGBA", (90*num + 4*(num-1), 90))
+	im_final = Image.new("RGBA", (x*num + 4*(num-1), y))
 	i = 0
-	for x in event_champs:
-		im = Image.open(x.thumbnail)
-		if(x.status == Status.DEAD):
+	for c in event_champs:
+		im = Image.open(c.thumbnail)
+		if(c.status == Status.DEAD):
 			im = im.convert('LA')
-		im_final.paste(im, (94*i, 0))
+		im_final.paste(im, ((x+4)*i, 0))
 		im.close()
 		i += 1
 	im_final.save("final.png")
@@ -858,18 +848,22 @@ async def send_gallery(mode, *args):
 	embedVar = discord.Embed(title=e_title, color=0x00ff00, description=des)
 
 	num = len(champs)
-	# i can probably get clever with this and make it so different sized games have different number of ROWS
-	ROWS = 6
-	final_x = 90*ROWS + 4*(ROWS-1)
-	final_y = 94*(int(((num-1) / ROWS))+1)
+	# i can probably get clever with this and make it so different sized games have different number of COLS
+	COLS = 6
+	im = Image.open(champs[0].thumbnail)
+	thumb_x, thumb_y = im.size[0], im.size[1]
+
+	COLS = min(COLS, num)	# if less have died than there are columns, don't need the extras
+	final_x = thumb_x*COLS + 4*(COLS-1)
+	final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
 	im_final = Image.new("RGBA", (final_x, final_y))
 	i = 0
 	for x in champs:
 		im = Image.open(x.thumbnail)
 		if(x.status == Status.DEAD):
 			im = im.convert('LA')
-		x = 94*int(i%ROWS)
-		y = 94*int(i/ROWS)
+		x = (thumb_x+4)*int(i%COLS)
+		y = (thumb_y+4)*int(i/COLS)
 		im_final.paste(im, (x, y))
 		im.close()
 		i += 1
