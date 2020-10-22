@@ -26,10 +26,43 @@ class EventType(IntEnum):
 	Day = 1
 	Night = 2
 	Feast = 3
-	Arena = 4
+	KIMI = 4
+	TITANS = 5
+	PUBLIC = 6
 	
 	def __str__(self):
 		return self.name
+	
+	# bloodbath and night (0 and 2) always becomes day
+	# feast and special (3+) always become night
+	# day can become night, feast, or special
+	def next(self):
+		next_type = [EventType.Day, EventType.Night, EventType.Day, EventType.Night, EventType.Night, EventType.Night, EventType.Night]
+		return next_type[self]
+
+	def title(self):
+		title = [
+			"Bloodbath",
+			"DAY " + str(current_day),
+			"NIGHT " + str(current_day),
+			"Return to the Cornocopia",
+			"KIMI NO SEI",
+			"On that day",
+			"Results Thread"
+		]
+		return title[self]
+
+	def subtitle(self):
+		sub = [
+			None,
+			None,
+			None,
+			"The cornucopia is replenished with baits, hot takes, shit taste, dank memes, and memoirs from the jurors' families.",
+			"KIMI NO SEI KIMI NO SEI KIMI NO SEI KIMI NO SEI KIMI NO SEI KIMI NO SEI KIMI NO SEI",
+			"On that day, mankind received a grim reminder. The Colossal Titan appears, shattering the dome and letting loose a horde of Titans.",
+			"The public is released upon the arena, furious about their favorite shows being snubbed."
+		]
+		return sub[self]
 
 #		CLASSES
 
@@ -125,6 +158,8 @@ class Events:
 				if(x.get_count_killed() <= kill_limit):
 					possible_events.append(x)
 		idx = int(random.random() * len(possible_events)-1)
+		if(idx >= len(possible_events)):
+			print("possible error incoming")
 		return possible_events[idx]
 	
 	def add_event(self, new_event, type, fatal):
@@ -174,7 +209,7 @@ class Event:
 			# him / her / them
 			# himself / herself / themselves
 			
-			replace = "ERROR"
+			replace = "ERROR GR01"
 			g = players[char_num - 1].gender
 			# why doesn't python have switch cases
 			if(type == "Player"):
@@ -353,11 +388,13 @@ class Params:
 		global champions
 		global current_type
 		global stats
+		global FeastDay
 
+		# always calculating the chance based on those alive is handy
 		x = champions.get_count_alive()
 		
 		# y(x) = 0.1*log2(x/10+1)+0.2
-		self.fatal_chance = 0.1*math.log2(x/10+1)+0.2
+		#self.fatal_chance = 0.1*math.log2(x/10+1)+0.2
 
 		# y(x) = x/200 + 0.2
 		self.fatal_chance = x/200 + 0.15
@@ -371,10 +408,14 @@ class Params:
 		# apply floor to value
 		self.fatal_chance = max(0.2, self.fatal_chance)
 
-		# increase as rounds continue past day 5
-		if(stats.elapsed_turns > 10):
+		# increase as rounds continue past the feast
+		if(current_day > FeastDay):
 			self.fatal_chance += 0.025*(stats.elapsed_turns - 10)
 		
+		# forget all that actually if it's a special round
+		if(current_type > EventType.Feast):
+			self.fatal_chance = 0.4
+
 		print(self.fatal_chance)
 
 
@@ -390,7 +431,7 @@ params = Params()
 # Progress
 game_over = False
 endgame = False
-current_turn = 0
+current_day = 0
 current_event = 0
 imported = False
 
@@ -400,8 +441,9 @@ acting_champions = []
 
 # Other?
 current_type = EventType.Bloodbath
-sponsorship = True		# is sponsorship turned on?
+sponsorship = False		# is sponsorship turned on?
 context = None
+FeastDay = 4			# day of the feast event, and start of the rise in death rate
 # should some of this go into a class? YES!
 
 #		PREP FUNCTIONS
@@ -410,17 +452,17 @@ context = None
 async def prep_game(ctx):
 	global context
 	global newly_dead
-	global current_turn
+	global current_day
 	global current_event
 	global game_over
 	global stats
 	global imported
 	global endgame
-	
+
 	# champions and events should be filled at this point
 	# setup variables that need it
 	newly_dead.clear()
-	current_turn = 0
+	current_day = 0
 	current_event = 0
 	game_over = False
 	endgame = False
@@ -450,7 +492,6 @@ async def import_all():
 	import_list_of_champions()
 	await download_images(champions.roster)
 	print("done")
-
 
 # get list of champions from file
 def import_list_of_champions():
@@ -501,7 +542,7 @@ def import_list_of_events():
 	print("Importing events...")
 	line = f.readline() # eat first line
 	line = f.readline()
-	while(len(line) > 0):
+	while(len(line) > 1):
 		#print(line)
 		# ignore lines that start with "~". For dev sanity
 		if(line.startswith('~')):
@@ -560,7 +601,7 @@ async def download_images(champs_list):
 async def advance_n(n):
 	global acting_champions
 	global current_event
-	global current_turn
+	global current_day
 	global current_type
 	global game_over
 	global endgame
@@ -572,7 +613,7 @@ async def advance_n(n):
 	# add check to make sure the game has been initialized (imported stuff etc)
 	# CANT EVEN SEND A MESSAGE TO YELL AT USER UNTIL THEY DO $START LMAO
 	if(champions.num < 1):
-		await send_embed("Error, no champions", None, 0xff0000)
+		await send_embed("Error, no champions", None, None, 0xff0000)
 		return
 
 
@@ -581,6 +622,8 @@ async def advance_n(n):
 		global stats
 		global params
 		global sponsorship
+		global FeastDay
+
 		stats.increment_turn()
 		acting_champions = champions.get_list_alive()
 		random.shuffle(acting_champions)
@@ -591,7 +634,7 @@ async def advance_n(n):
 			# print message
 			endgame = True
 			print("final 8")
-			record("final 8")
+			record("\nfinal 8")
 			await send_gallery(3, "Final {0}".format(len(acting_champions)), "From now on, react to events to offer your sponsorship to these champions.")
 			reactions.fill_champions(acting_champions)
 			return		# prompt for another 'advance n'
@@ -600,22 +643,41 @@ async def advance_n(n):
 			reactions.about()
 
 		# decide round type
-		# TODO: ADD FEAST to day 5
-		# TODO: ADD random major events
-		if(current_turn == 0):
+
+		# special cases
+		# first type is bloodbath
+		if(current_day == 0):
 			current_type = EventType.Bloodbath
-			text = "Bloodbath"
+		# feast on feastday
+		elif (current_type is EventType.Day and current_day is FeastDay):
+			current_type = EventType.Feast
+		# possibly select a special round
+		elif (current_type is EventType.Day):
+			# first, if there will be a special round
+			if(random.random() < 0.9):
+				current_type = EventType.Night
+			# then what special round it is
+			else:
+				# get list of special rounds
+				arena = []
+				for t in EventType:
+					if(t > EventType.Feast):
+						arena.append(t)
+				current_type = arena[int(random.random()*len(arena))]	# select from list
 		else:
-			current_type = EventType((current_turn+1)%2 + 1)		# alternate day and night with day being first
-			text = str(current_type).upper() + " " + str(int((current_turn+1)/2)) 
+			# normal next cases
+			current_type = current_type.next()
+
+		text = current_type.title()
+		subtitle = current_type.subtitle()
 		print(text)
-		record("\n" + text+ "\n")
-		await send_embed(text, None, 0x0000ff)
-		
-		# TODO
-		# Add cornocopia event on day 4(?) and random big events throughout
+		record("\n" + text + "\n")
+		await send_embed(text, subtitle, None, 0x0000ff)
 
 		params.update_fatal_chance()
+
+		# maybe always have new turn be its own prompt
+		return
 	
 	# advance up to as many turns as the user requested
 	advanced = 0
@@ -631,15 +693,16 @@ async def advance_n(n):
 	# if this turn is over, set up next turn
 	if(len(acting_champions) == 0 and game_over is False):	
 		current_event = 0
+
+		# possibly move this to just night / bloodbath
 		text = str(current_type) + " Over"
 		print(text)
-		await send_embed(text, None, 0x0000ff)
+		await send_embed(text, None, None, 0x0000ff)
 		
-		# announce dead at end of night and at end of bloodbath
+		# announce dead at end of night and at end of bloodbath. Also, increment day
 		if(current_type is EventType.Night or current_type is EventType.Bloodbath):
+			current_day += 1
 			await send_newly_dead()
-		
-		current_turn += 1
 
 # setup and run a single event featuring 1 or more champions
 async def run_event(acting_list, type):
@@ -711,7 +774,7 @@ async def check_for_winner():
 		link = winner.image_link
 		link = link[:-5] + link[-4:]
 		print(link)
-		await send_embed(text, link, 0x0000ff)		# image is compressed as shit but it's fine
+		await send_embed(text, None, link, 0x0000ff)		# image is compressed as shit but it's fine
 		
 		# prep stats and stuff
 		stats.about()
@@ -720,7 +783,7 @@ async def check_for_winner():
 #		MESSAGE FUNCTIONS
 
 # create and send a simple embed
-async def send_embed(arg, image_url, rgb):
+async def send_embed(title, subtitle, image_url, rgb):
 	global context
 	if(context is None):
 		print("No context yet")
@@ -730,7 +793,7 @@ async def send_embed(arg, image_url, rgb):
 		e_color = 0x00ff00
 	else:
 		e_color = rgb
-	embedVar = discord.Embed(title=arg, color=e_color)
+	embedVar = discord.Embed(title=title, color=e_color, description=subtitle)
 
 	if(image_url is not None):
 		#embedVar.set_image(url='https://i.imgur.com/wSTFkRM.png')
@@ -810,7 +873,7 @@ async def send_event_image(event_champs, msg, color):
 	embedVar.set_image(url="attachment://final.png")
 	await context.send(file=file,embed=embedVar)
 
-	#await send_embed(msg, None, color)
+	#await send_embed(msg, None, None, color)
 	#await context.send(file=discord.File("final.png", x.name + '.png'))
 
 # generate and send an image of participating champions (2d stitch)
@@ -879,8 +942,11 @@ def process_reaction(message_title, user):
 	global reactions
 	global champions
 	global sponsorship
+	global endgame
 
 	if(not sponsorship):		# not sponsoring, move on
+		return -1
+	if(not endgame):			# if not in final 8, move on
 		return -1
 
 	msg = message_title
