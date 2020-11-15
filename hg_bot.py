@@ -54,7 +54,7 @@ class EventType(IntEnum):
 
 	def subtitle(self):
 		sub = [
-			None,
+			"As the images stand on their podiums, the horn sounds. Some prepare to hate minorities and women, others get ready to destroy people with FACTS and LOGIC, and some prepare to meme.",
 			None,
 			None,
 			"The cornucopia is replenished with baits, hot takes, shit taste, dank memes, and memoirs from the jurors' families.",
@@ -116,7 +116,10 @@ class Champions:
 class Champion:
 	def __init__(self, name, image, gender, status):
 		self.name = name
-		self.image_link = str(image + "b.png")			# NOTE discord.py does NOT like the l, t, m, etc extensions on imgur. s seems ok?
+
+		# NOTE discord.py does NOT like the l, t, m, etc extensions on imgur. s seems ok?
+		self.image_link = str(image + "b.png")
+		#self.image_link = str(image + ".gifv")
 		self.gender = gender
 		self.status = status
 		self.thumbnail = None
@@ -397,20 +400,21 @@ class Params:
 		#self.fatal_chance = 0.1*math.log2(x/10+1)+0.2
 
 		# y(x) = x/200 + 0.2
-		self.fatal_chance = x/200 + 0.15
+		self.fatal_chance = x/200 + 0.1
 
 		# add day / night bias
+		bias = 0.05 #* random.random()
 		if(current_type is EventType.Day):
-			self.fatal_chance += 0.05
+			self.fatal_chance += bias
 		if(current_type is EventType.Night):
-			self.fatal_chance -= 0.05
+			self.fatal_chance -= bias
 		
 		# apply floor to value
-		self.fatal_chance = max(0.2, self.fatal_chance)
+		self.fatal_chance = max(0.15, self.fatal_chance)
 
 		# increase as rounds continue past the feast
 		if(current_day > FeastDay):
-			self.fatal_chance += 0.025*(stats.elapsed_turns - 10)
+			self.fatal_chance += 0.035*(stats.elapsed_turns - 10)
 		
 		# forget all that actually if it's a special round
 		if(current_type > EventType.Feast):
@@ -441,7 +445,7 @@ acting_champions = []
 
 # Other?
 current_type = EventType.Bloodbath
-sponsorship = False		# is sponsorship turned on?
+sponsorship = True		# is sponsorship turned on?
 context = None
 FeastDay = 4			# day of the feast event, and start of the rise in death rate
 # should some of this go into a class? YES!
@@ -476,6 +480,8 @@ async def prep_game(ctx):
 		print("resetting current cast")
 		for x in champions.roster:
 			x.set_status(Status.ALIVE)
+
+	# depends on if I want this after ~ready or ~advance
 	await send_gallery(0)
 
 # perform all import / download functions
@@ -511,6 +517,9 @@ def import_list_of_champions():
 	while(len(line) > 1):
 		#work
 		x = line.split("\t")
+		# remove erroneous \ts
+		while("" in x): 
+			x.remove("")
 		
 		# if the .png is there, remove it. Later operations require it to not be there
 		link = x[1]
@@ -672,11 +681,17 @@ async def advance_n(n):
 		subtitle = current_type.subtitle()
 		print(text)
 		record("\n" + text + "\n")
+
+		# depends on if I want this after ~ready or ~advance
+		#if(current_type is EventType.Bloodbath):
+		#	await send_gallery(0)
+
 		await send_embed(text, subtitle, None, 0x0000ff)
 
 		params.update_fatal_chance()
 
 		# maybe always have new turn be its own prompt
+		current_event += 1
 		return
 	
 	# advance up to as many turns as the user requested
@@ -775,6 +790,8 @@ async def check_for_winner():
 		link = link[:-5] + link[-4:]
 		print(link)
 		await send_embed(text, None, link, 0x0000ff)		# image is compressed as shit but it's fine
+		if(os.path.exists("final.png")):
+			os.remove("final.png")
 		
 		# prep stats and stuff
 		stats.about()
