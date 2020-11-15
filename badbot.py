@@ -6,6 +6,7 @@ import asyncio
 import io
 import aiohttp
 import math
+import importlib
 from datetime import datetime
 from PIL import Image
 from PIL import ImageEnhance
@@ -25,7 +26,7 @@ ME = badbot_info.OWNER
 HG_CHANNEL = badbot_info.HG_CHANNEL
 GM = badbot_info.GM
 
-bot = commands.Bot(command_prefix='~')
+bot = commands.Bot(command_prefix='~', case_insensitive=True)
 context = None
 
 ####################### STORED DATA ################################
@@ -80,7 +81,7 @@ async def advance(ctx, *args):
 	#await context.message.delete()
 
 @bot.command()
-async def start(ctx):
+async def ready(ctx):
 	global context
 	if(not await check_channel(ctx) or not await check_gm(ctx)):
 		return
@@ -89,7 +90,8 @@ async def start(ctx):
 	async with ctx.typing():
 		await prep_game(ctx)
 	
-	await context.message.delete()
+	emoji = '✅'
+	await ctx.message.add_reaction(emoji)
 
 @bot.command()
 async def quit(ctx):
@@ -206,6 +208,8 @@ async def check_gm(ctx):
 		await ctx.message.add_reaction(emoji)
 		return False
 
+# TODO
+# function to reload the hg_bot.py module so I don't have to restart the whole bot if only hg_bot.py was changed
 
 #####################################################################
 
@@ -213,16 +217,6 @@ async def check_gm(ctx):
 @bot.command()
 async def source(ctx):
 	await ctx.send("https://github.com/Ares-0/Discord-Hunger-Games")
-
-# Repeats the argument given
-@bot.command()
-async def echo(ctx, *args):
-	await ctx.send(' '.join(args))
-
-# Says hi
-@bot.command()
-async def hello(ctx):
-	await ctx.send("Hello, {0}".format(ctx.author.mention))
 
 # Saves or prints the saved gw schedule
 @bot.command()
@@ -261,8 +255,9 @@ async def gw2(ctx, *args):
 			# get x values (aka day)
 			x0, y0, x1, y1 = (0, 0, 100, im.size[1])
 			day = datetime.today().weekday() + 0
-			x0 = xs[(day+2)%7]
-			x1 = xs[(day+3)%7]
+			idx = (day+1)%7+1
+			x0 = xs[idx]
+			x1 = xs[idx+1]
 			
 			# get y values (aka time)
 			starttime = 19.5		# time of day in CST of first watch
@@ -294,6 +289,39 @@ async def gw2(ctx, *args):
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)
 
+# Play a local mp3 file in voice chat
+@bot.command()
+async def count(ctx):
+	# fetch the path to the audio file from my secret file
+	file_path = badbot_info.COUNT_PATH
+
+	# Gets voice channel of message author
+	voice_channel = ctx.author.voice.channel
+	if voice_channel != None:
+		emoji = '✅'
+		await ctx.message.add_reaction(emoji)
+		vc = await voice_channel.connect()
+		vc.play(discord.FFmpegPCMAudio(executable="C:/Program Files/ffmpeg/bin/ffmpeg.exe", source=file_path))
+
+		# Sleep while audio is playing.
+		while vc.is_playing():
+			await asyncio.sleep(0.1)
+		await vc.disconnect()
+	else:
+		await ctx.send(str(ctx.author.name) + "is not in a channel.")
+
+####################################################################
+
+# Repeats the argument given
+@bot.command()
+async def echo(ctx, *args):
+	await ctx.send(' '.join(args))
+
+# Says hi
+@bot.command()
+async def hello(ctx):
+	await ctx.send("Hello, {0}".format(ctx.author.mention))
+
 # Randomly* selects between given arguments
 @bot.command()
 async def choose(ctx, *args):
@@ -311,15 +339,15 @@ async def choose(ctx, *args):
 		result = winner
 	await ctx.send(result)
 
-# i was gonna check all the messages in channels or something
+# WIP? i was gonna check all the messages in channels or something
 @bot.command()
 async def collect(ctx, *args):
-	ch = bot.get_channel(764531995861712946)
+	#ch = bot.get_channel(764531995861712946)
 	print("working...")
 
 	count = 0
-	async for message in ch.history(limit=100):
-		count += 1
+	#async for message in ch.history(limit=100):
+	#	count += 1
 	print(count)
 	
 	
@@ -338,6 +366,7 @@ async def embed_full(ctx, arg):
 	embedVar.add_field(name="Field2", value="hi2", inline=True)
 	str = "https://i.imgur.com/wSTFkRM.png"
 	embedVar.set_image(url='https://i.imgur.com/wSTFkRM.png')
+	embedVar.set_image(url="https://media0.giphy.com/media/W5C9c8nqoaDJWh34i6/giphy.gif")
 	embedVar.set_thumbnail(url=str)
 	embedVar.set_author(name="Some author", url='https://discord.js.org/', icon_url="https://i.imgur.com/wSTFkRM.png")
 	embedVar.set_footer(text='Some footer text here', icon_url='https://discord.js.org/')
