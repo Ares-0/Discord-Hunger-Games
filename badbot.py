@@ -27,6 +27,7 @@ HG_CHANNEL = badbot_info.HG_CHANNEL
 GM = badbot_info.GM
 
 bot = commands.Bot(command_prefix='~', case_insensitive=True)
+bot.remove_command('help')
 context = None
 
 ####################### STORED DATA ################################
@@ -213,6 +214,18 @@ async def check_gm(ctx):
 
 #####################################################################
 
+# List of commands
+@bot.command()
+async def help(ctx):
+	embed=discord.Embed(title="Sailor Mars Commands", description="Use '~' to trigger.")
+	embed.set_thumbnail(url="https://imgur.com/KoHvsJM.png")
+	embed.add_field(name="~gw", value="Displays the current group watch schedule", inline=False)
+	embed.add_field(name="~gw < link >", value="Updates the current group watch schedule", inline=False)
+	embed.add_field(name="~gw2", value="Displays the group watch schedule with time sensitive highlights", inline=False)
+	embed.add_field(name="~count", value="Plays a 5 second countdown in voice", inline=False)
+	embed.add_field(name="~source", value="Prints github source", inline=False)
+	await ctx.send(embed=embed)
+
 # Prints a link to the source code on github
 @bot.command()
 async def source(ctx):
@@ -296,10 +309,9 @@ async def count(ctx):
 	file_path = badbot_info.COUNT_PATH
 
 	# Gets voice channel of message author
-	voice_channel = ctx.author.voice.channel
-	if voice_channel != None:
-		emoji = '✅'
-		await ctx.message.add_reaction(emoji)
+	if ctx.author.voice is not None:
+		voice_channel = ctx.author.voice.channel
+		await ctx.message.add_reaction('✅')
 		vc = await voice_channel.connect()
 		vc.play(discord.FFmpegPCMAudio(executable="C:/Program Files/ffmpeg/bin/ffmpeg.exe", source=file_path))
 
@@ -308,7 +320,8 @@ async def count(ctx):
 			await asyncio.sleep(0.1)
 		await vc.disconnect()
 	else:
-		await ctx.send(str(ctx.author.name) + "is not in a channel.")
+		#await ctx.send(str(ctx.author.name) + " is not in a channel.")
+		await ctx.send("You are not in a voice channel.")
 
 ####################################################################
 
@@ -389,7 +402,7 @@ async def image2(ctx):
 				data = io.BytesIO(await resp.read())
 				await ctx.send(file=discord.File(data, 'cool_image.png'))
 
-# helper functions that don't await can function as normally
+# helper functions that don't await can function as normal
 def add(a, b):
 	return a + b
 
@@ -400,7 +413,20 @@ def add(a, b):
 # 		await asyncio.sleep(10)
 # 		#print('beep')
 
-	
+
+# Specifically mentioning the bot
+#@bot.event
+#async def on_message(message):
+#	if bot.user.mentioned_in(message):
+#		await message.channel.send("hello!")
+# appears to break the rest of the commands hmmmmmmmmmmm
+
+@bot.event
+async def on_command_error(ctx, error):
+	if isinstance(error, commands.CommandNotFound):  # Quietly catch erroneous ~X commands
+		pass
+	elif isinstance(error, commands.MissingPermissions):
+		await ctx.send('I might not have permissions for that')
 
 @bot.event
 async def on_ready():
@@ -410,7 +436,7 @@ async def on_ready():
 	print(bot.user.name)
 	print(bot.user.id)
 	print('------')
-	await bot.change_presence(activity=discord.Game(name="ping ARES if weird things happen"))
+	await bot.change_presence(activity=discord.Game(name="with simulations"))
 	#client.loop.create_task(status_task())
 
 	data.read()
