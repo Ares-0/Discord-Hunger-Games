@@ -22,6 +22,7 @@ Contains the work for the hunger games simulation.
 
 ### cast_in.txt
 Contains the list of cast members that will be imported when the games begin.  
+Second line is the number of champions to include (useful for including fewer than the entire file)
 Each line must be formatted as follows (tab separated):
 
 #### Name  Link  Gender
