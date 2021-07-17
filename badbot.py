@@ -25,6 +25,7 @@ TOKEN = badbot_info.TOKEN
 ME = badbot_info.OWNER
 HG_CHANNEL = badbot_info.HG_CHANNEL
 GM = badbot_info.GM
+ERROR_CHANNEL = badbot_info.ERROR_CHANNEL
 
 bot = commands.Bot(command_prefix='~', case_insensitive=True)
 bot.remove_command('help')
@@ -96,7 +97,7 @@ async def ready(ctx):
 
 @bot.command()
 async def quit(ctx):
-	if(not await check_channel(ctx) or not await check_gm(ctx)):
+	if(ctx.message.author.id is not ME):
 		return
 	
 	# ???????????????????
@@ -161,7 +162,8 @@ async def on_reaction_add(reaction, user):
 	if(reaction.message.channel.id in HG_CHANNEL):		# if message is in HG channel
 		sup = process_reaction(reaction.message.embeds[0].title, user)
 	
-	if sup <= 10 and sup > 0:
+	verbose = False
+	if sup <= 10 and sup > 0 and verbose:
 		# remove previous number
 		for x in reaction.message.reactions:
 			if x.me:
@@ -209,6 +211,11 @@ async def check_gm(ctx):
 		await ctx.message.add_reaction(emoji)
 		return False
 
+# Prints a link to the current hunger games album (hardcoded fn)
+@bot.command()
+async def album(ctx):
+	await ctx.send("<https://imgur.com/a/uGV33o6>")
+
 # TODO
 # function to reload the hg_bot.py module so I don't have to restart the whole bot if only hg_bot.py was changed
 
@@ -235,17 +242,28 @@ async def source(ctx):
 @bot.command()
 async def gw(ctx, *args):
 	global data
-	if(len(args) < 1):
-		if(data.GW_link is None):
-			await ctx.send("No link saved")
-		else:
-			await ctx.send(data.GW_link)
-	else:
+		
+	# if there is an attachment, save it's URL
+	if(len(ctx.message.attachments) > 0):
+		data.GW_link = ctx.message.attachments[0].url
+		data.write()
+		emoji = '✅'
+		await ctx.message.add_reaction(emoji)
+	# if there is an argument, save the argument as URL
+	elif(len(args) > 0):
 		s = args[0].split("?")
 		data.GW_link = s[0]
 		data.write()
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)
+	# if there is neither, print the saved data
+	else:
+		# nothing saved
+		if(data.GW_link is None):
+			await ctx.send("No link saved")
+		# print saved link
+		else:
+			await ctx.send(data.GW_link)
 
 # Saves or prints the saved gw schedule, but with some color manipulation
 @bot.command()
@@ -308,11 +326,31 @@ async def count(ctx):
 	# fetch the path to the audio file from my secret file
 	file_path = badbot_info.COUNT_PATH
 
-	# Gets voice channel of message author
+	# If author not in voice, move on
 	if ctx.author.voice is not None:
 		voice_channel = ctx.author.voice.channel
+		vc = None
+		message = "VC exception occured"	# generic
+		try:	# this often doesn't complete still
+			out = "connecting to \"" + str(voice_channel.name) + "\" in \"" + str(voice_channel.guild.name) + "\"..."
+			print(out)
+			vc = await voice_channel.connect(timeout=5.0)
+		except asyncio.TimeoutError:
+			print("timed out")
+			message = "TimeoutError"
+		except discord.ClientException:
+			print("Am I already in a channel? If not, try again")
+			await ctx.send("I might already be counting somewhere")
+			message = "ClientException: Already connected to a voice channel"
+		except:
+			print("exception occured")
+		if vc is None:
+			await ctx.message.add_reaction('❌')
+			await report_error(message)
+			return
+		
+		print("done")
 		await ctx.message.add_reaction('✅')
-		vc = await voice_channel.connect()
 		vc.play(discord.FFmpegPCMAudio(executable="C:/Program Files/ffmpeg/bin/ffmpeg.exe", source=file_path))
 
 		# Sleep while audio is playing.
@@ -320,8 +358,26 @@ async def count(ctx):
 			await asyncio.sleep(0.1)
 		await vc.disconnect()
 	else:
-		#await ctx.send(str(ctx.author.name) + " is not in a channel.")
 		await ctx.send("You are not in a voice channel.")
+
+# Print the given message in my error channel
+async def report_error(message):
+	global ERROR_CHANNEL
+	global ME
+	channel = bot.get_channel(ERROR_CHANNEL)
+	await channel.send("{0}, an error has occured:\n{1}".format(bot.get_user(ME).mention, message))
+
+# Testing the reporting
+@bot.command()
+async def report_test(ctx, *args):
+	await report_error(' '.join(args))
+
+# force leave voice
+@bot.command()
+async def leave(ctx):
+	voice_channel = bot.voice_clients
+	for x in voice_channel:
+		await x.disconnect()
 
 ####################################################################
 
@@ -413,13 +469,17 @@ def add(a, b):
 # 		await asyncio.sleep(10)
 # 		#print('beep')
 
+#'''
+@bot.event
+async def on_message(message):
+	if bot.user.mentioned_in(message):
+		if("count" in message.content):
+			ctx = await bot.get_context(message)
+			await count(ctx)
+		await message.channel.send("hello!")
 
-# Specifically mentioning the bot
-#@bot.event
-#async def on_message(message):
-#	if bot.user.mentioned_in(message):
-#		await message.channel.send("hello!")
-# appears to break the rest of the commands hmmmmmmmmmmm
+	await bot.process_commands(message)
+	#'''
 
 @bot.event
 async def on_command_error(ctx, error):

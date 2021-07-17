@@ -8,6 +8,7 @@ import io
 import aiohttp
 import os
 import math
+import configparser
 from PIL import Image
 
 #		ENUMS
@@ -118,7 +119,7 @@ class Champion:
 		self.name = name
 
 		# NOTE discord.py does NOT like the l, t, m, etc extensions on imgur. s seems ok?
-		self.image_link = str(image + "b.png")
+		self.image_link = str(image + "b.png")		# b.png
 		#self.image_link = str(image + ".gifv")
 		self.gender = gender
 		self.status = status
@@ -155,15 +156,11 @@ class Events:
 	def get_random_event(self, max_champs, type, fatal, kill_limit):
 		type_events = self.get_type_list(type, fatal)
 		possible_events = []
-		#print(str(max_champs) + ", " + str(fatal) + ", " + str(kill_limit))
 		for x in type_events:
 			if(x.numChampions <= max_champs):
 				if(x.get_count_killed() <= kill_limit):
 					possible_events.append(x)
-		idx = int(random.random() * len(possible_events)-1)
-		if(idx >= len(possible_events)):
-			print("possible error incoming")
-		return possible_events[idx]
+		return random.choice(possible_events)
 	
 	def add_event(self, new_event, type, fatal):
 		# error checking?
@@ -196,14 +193,17 @@ class Event:
 		print()
 
 	def get_final_text(self, players):
-		out = self.raw_text
+		if(self.numChampions != len(players)):
+			print("ERROR length mismatch")
 		
+		out = self.raw_text
+
 		# replace stuff like (Player1), (pro2), etc
 		m = re.search(r"(\([\w\/]*\d\))", out)				# \([\w\/]*\d\)
 		count = 0
 		while(m):
 			reg = m[0]
-			
+
 			char_num = int(reg[-2])
 			type = reg[1:-2]
 			
@@ -212,7 +212,7 @@ class Event:
 			# him / her / them
 			# himself / herself / themselves
 			
-			replace = "ERROR GR01"
+			replace = "ERROR GR01"						# this still pops up EXTREMELY rarely. Like actually 1 in 10k
 			g = players[char_num - 1].gender
 			# why doesn't python have switch cases
 			if(type == "Player"):
@@ -238,6 +238,7 @@ class Event:
 			# infinite loop catch
 			count += 1
 			if(count >= 10):
+				print("error, infinite loop in regex")
 				break
 		return out
 	
@@ -247,6 +248,7 @@ class Event:
 	async def print_event(self, event_champs):
 		global context
 		global params
+		global VERBOSE
 
 		msg = self.get_final_text(event_champs)
 		print(msg)
@@ -254,10 +256,14 @@ class Event:
 		if(len(self.killed) > 0):
 			color = 0xff0000
 		
-		line = str(params.get_fatal_chance()) + "    " + msg + "\n"
+		line = "{:.3f}".format(params.get_fatal_chance())
+		if(SPONSORSHIP):
+			line = line + " ({:.3f}) ".format(reactions.get_fatal_chance(event_champs[0]))
+		line = line + "    " + msg + "\n"
 		record(line)
 
-		await send_event_image(event_champs, msg, color)
+		if(VERBOSE):
+			await send_event_image(event_champs, msg, color)
 
 # Collection of statistics
 class Stats:
@@ -296,7 +302,7 @@ class Reactions:
 	users = []
 	reactions = [[0 for i in range(20)] for j in range(8)]
 	totals = []
-	limit = 3
+	limit = 1
 
 	def fill_champions(self, champs):
 		self.champions.clear()
@@ -339,7 +345,7 @@ class Reactions:
 		
 	def get_fatal_chance(self, champ):
 		global params
-		SPONSOR_WEIGHT = 0.35	# chosen by survey
+		SPONSOR_WEIGHT = 0.2	# 0.35 chosen by survey
 		print(champ.name)
 
 		# two aspects to this
@@ -351,10 +357,10 @@ class Reactions:
 		# this is before taking into account sponsor weight
 
 		# how strong the sponsorship is. 1 is maximum (full aid), 0 is minimum (no aid)
-		sponsor = 0
+		sponsor = 0		# initial value
 		c = self.get_champ_idx(champ)
 		if(sum(self.totals) != 0):
-			sponsor = self.totals[c] / self.limit*len(self.users)	# sponsorships given / sponsorships possible
+			sponsor = self.totals[c] / self.limit*len(self.users)	# sponsorships given / sponsorships possible (aka users*limit)
 			sponsor = max(0, min(1, sponsor))		# keep sponsor in bounds plz
 		
 		last = params.get_fatal_chance() * (1-sponsor*SPONSOR_WEIGHT)
@@ -372,6 +378,9 @@ class Reactions:
 				self.reactions[x][y] = 0
 
 	def get_champ_idx(self, champ):
+		global endgame
+		if not endgame:
+			return -1
 		try:
 			idx = self.champions.index(champ.name)
 			return idx
@@ -400,21 +409,21 @@ class Params:
 		#self.fatal_chance = 0.1*math.log2(x/10+1)+0.2
 
 		# y(x) = x/200 + 0.2
-		self.fatal_chance = x/200 + 0.1
+		self.fatal_chance = x/400 + 0.15
 
 		# add day / night bias
-		bias = 0.05 #* random.random()
+		bias = 0.03 #* random.random()
 		if(current_type is EventType.Day):
 			self.fatal_chance += bias
 		if(current_type is EventType.Night):
 			self.fatal_chance -= bias
 		
 		# apply floor to value
-		self.fatal_chance = max(0.15, self.fatal_chance)
+		self.fatal_chance = max(0.20, self.fatal_chance)
 
 		# increase as rounds continue past the feast
 		if(current_day > FeastDay):
-			self.fatal_chance += 0.035*(stats.elapsed_turns - 10)
+			self.fatal_chance += 0.04*(stats.elapsed_turns - FeastDay*2+2)
 		
 		# forget all that actually if it's a special round
 		if(current_type > EventType.Feast):
@@ -438,16 +447,17 @@ endgame = False
 current_day = 0
 current_event = 0
 imported = False
+current_type = EventType.Bloodbath
+context = None
 
 # Lists
 newly_dead = []
 acting_champions = []
 
 # Other?
-current_type = EventType.Bloodbath
-sponsorship = True		# is sponsorship turned on?
-context = None
-FeastDay = 4			# day of the feast event, and start of the rise in death rate
+FeastDay = 3			# day of the feast event, and start of the rise in death rate
+SPONSORSHIP = True		# is sponsorship turned on?
+VERBOSE = True			# if true, send messages to discord. If false, just print to logs
 # should some of this go into a class? YES!
 
 #		PREP FUNCTIONS
@@ -471,6 +481,7 @@ async def prep_game(ctx):
 	game_over = False
 	endgame = False
 	stats.clear()
+	load_ini()
 
 	context = ctx
 	if(not imported):
@@ -496,7 +507,7 @@ async def import_all():
 	import_list_of_events()
 	events.about()
 	import_list_of_champions()
-	await download_images(champions.roster)
+	await download_images(champions.roster)	# TODO: Skip when not VERBOSE
 	print("done")
 
 # get list of champions from file
@@ -511,10 +522,17 @@ def import_list_of_champions():
 	
 	print("Importing champions...")
 	line = f.readline()	# eat first line
-	line = f.readline() # get #entries value
+	line = f.readline() # get #entries value				# TODO Throw error if this seems wrong
 	entries = int(line[:-1])
 	line = f.readline()
+	#print(line)
 	while(len(line) > 1):
+		print(line)
+		# ignore lines that start with "~". For dev sanity
+		if(line.startswith('~')):
+			line = f.readline()
+			continue
+		
 		#work
 		x = line.split("\t")
 		# remove erroneous \ts
@@ -595,6 +613,8 @@ async def download_images(champs_list):
 	print("Downloading images...")
 	async with aiohttp.ClientSession() as session:
 		for x in champs_list:
+			# to do: get image from imgur or local from computer?
+			#print(x.name)
 			async with session.get(x.image_link) as resp:
 				if resp.status != 200:
 					return await context.send('Could not download file...')
@@ -630,7 +650,7 @@ async def advance_n(n):
 	if(current_event == 0):			# maybe move to another function
 		global stats
 		global params
-		global sponsorship
+		global SPONSORSHIP
 		global FeastDay
 
 		stats.increment_turn()
@@ -639,7 +659,7 @@ async def advance_n(n):
 		reactions.update_count()
 		
 		# In final 8, start accepting emotes as sponsorship
-		if(sponsorship and not endgame and len(acting_champions) <= 8):
+		if(SPONSORSHIP and not endgame and len(acting_champions) <= 8):
 			# print message
 			endgame = True
 			print("final 8")
@@ -663,7 +683,7 @@ async def advance_n(n):
 		# possibly select a special round
 		elif (current_type is EventType.Day):
 			# first, if there will be a special round
-			if(random.random() < 0.9):
+			if(random.random() < 0.85):
 				current_type = EventType.Night
 			# then what special round it is
 			else:
@@ -680,13 +700,15 @@ async def advance_n(n):
 		text = current_type.title()
 		subtitle = current_type.subtitle()
 		print(text)
-		record("\n" + text + "\n")
+		left = champions.get_count_alive()
+		record("\n" + text + "  " + str(left) + " alive\n")
 
 		# depends on if I want this after ~ready or ~advance
 		#if(current_type is EventType.Bloodbath):
 		#	await send_gallery(0)
 
-		await send_embed(text, subtitle, None, 0x0000ff)
+		if(VERBOSE):
+			await send_embed(text, subtitle, None, 0x0000ff)
 
 		params.update_fatal_chance()
 
@@ -701,7 +723,8 @@ async def advance_n(n):
 		await run_event(acting_champions, current_type)
 		advanced += 1
 		current_event += 1
-	
+
+	print("done advancing")
 	# check if game is over
 	await check_for_winner()
 
@@ -712,7 +735,8 @@ async def advance_n(n):
 		# possibly move this to just night / bloodbath
 		text = str(current_type) + " Over"
 		print(text)
-		await send_embed(text, None, None, 0x0000ff)
+		if(VERBOSE):
+			await send_embed(text, None, None, 0x0000ff)
 		
 		# announce dead at end of night and at end of bloodbath. Also, increment day
 		if(current_type is EventType.Night or current_type is EventType.Bloodbath):
@@ -729,7 +753,7 @@ async def run_event(acting_list, type):
 	# Get fatal chance of this event
 	num_alive = champions.get_count_alive()
 	
-	if(sponsorship and num_alive <= 8):
+	if(SPONSORSHIP and num_alive <= 8):
 		chance = reactions.get_fatal_chance(acting_list[-1])
 	else:
 		chance = params.get_fatal_chance()
@@ -746,7 +770,7 @@ async def run_event(acting_list, type):
 
 	# select an event from the appropriate list
 	this_event = events.get_random_event(champions_remaining, type, fatal, kill_limit)
-	
+
 	# pull champions
 	event_champs = []
 	for x in range(0, this_event.numChampions):
@@ -760,10 +784,9 @@ async def run_event(acting_list, type):
 
 	# display event
 	await this_event.print_event(event_champs)
-	
 	# TODO
 	# give 'killers' a point
-	
+
 # Check if one champion is left, and announce if so
 async def check_for_winner():
 	global champions
@@ -855,9 +878,11 @@ async def send_newly_dead():
 		im_final.save("final.png")
 		file=discord.File("final.png", filename="final.png")
 		embedVar.set_image(url="attachment://final.png")
-		await context.send(file=file,embed=embedVar)
+		if(VERBOSE):
+			await context.send(file=file,embed=embedVar)
 	else:
-		await context.send(embed=embedVar)
+		if(VERBOSE):
+			await context.send(embed=embedVar)
 
 	newly_dead.clear()
 
@@ -903,6 +928,10 @@ async def send_gallery(mode, *args):
 	global context
 	if(context is None):
 		print("Error, no context yet")
+		return
+
+	# no point continuing if we're not even sending the message
+	if(not VERBOSE):
 		return
 
 	e_title = "If you see this, there was an error"
@@ -951,6 +980,7 @@ async def send_gallery(mode, *args):
 	file=discord.File("final.png", filename="final.png")
 	embedVar.set_image(url="attachment://final.png")
 	
+	#if(VERBOSE):
 	await context.send(file=file,embed=embedVar)
 
 #		SPONSOR FUNCTIONS
@@ -958,10 +988,10 @@ async def send_gallery(mode, *args):
 def process_reaction(message_title, user):
 	global reactions
 	global champions
-	global sponsorship
+	global SPONSORSHIP
 	global endgame
 
-	if(not sponsorship):		# not sponsoring, move on
+	if(not SPONSORSHIP):		# not sponsoring, move on
 		return -1
 	if(not endgame):			# if not in final 8, move on
 		return -1
@@ -1001,6 +1031,7 @@ def wipe():
 
 	newly_dead.clear()
 	acting_champions.clear()
+	load_ini()
 	imported = False
 
 # return game_over
@@ -1013,3 +1044,16 @@ def record(line):
 	f = open("record.txt", "a")
 	f.write(line)
 	f.close()
+
+# read settings from .ini file
+def load_ini():
+	global FeastDay
+	global SPONSORSHIP
+	global VERBOSE
+
+	config = configparser.ConfigParser()
+	config.read('./hg_files/HG.ini')
+	FeastDay = int(config['Settings']['FeastDay'])
+	SPONSORSHIP = config['Settings'].getboolean('SPONSORSHIP')
+	VERBOSE = config['Settings'].getboolean('VERBOSE')
+	
