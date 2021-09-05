@@ -10,6 +10,7 @@ import os
 import math
 import configparser
 from PIL import Image
+from pathlib import Path
 
 #		ENUMS
 
@@ -56,8 +57,8 @@ class EventType(IntEnum):
 	def subtitle(self):
 		sub = [
 			"As the images stand on their podiums, the horn sounds. Some prepare to hate minorities and women, others get ready to destroy people with FACTS and LOGIC, and some prepare to meme.",
-			None,
-			None,
+			"",
+			"",
 			"The cornucopia is replenished with baits, hot takes, shit taste, dank memes, and memoirs from the jurors' families.",
 			"KIMI NO SEI KIMI NO SEI KIMI NO SEI KIMI NO SEI KIMI NO SEI KIMI NO SEI KIMI NO SEI",
 			"On that day, mankind received a grim reminder. The Colossal Titan appears, shattering the dome and letting loose a horde of Titans.",
@@ -285,14 +286,9 @@ class Stats:
 		print("Elapsed Events: " + str(self.elapsed_events))
 		print("Fatal Chance: " + str(params.get_fatal_chance()))
 
-		filename = "io/stats.csv"
-		path = os.path.dirname(__file__)
-		path = os.path.join(os.path.split(path)[0], filename)
-
-		f = open(path, 'a')
-		line = "{0}, {1}, {2}, {3}\n".format(champions.num, self.elapsed_turns, self.elapsed_events, params.get_fatal_chance())
-		f.write(line)
-		f.close()
+		with open(io_dir / "stats.csv", 'a') as f:
+			line = "{0}, {1}, {2}, {3}\n".format(champions.num, self.elapsed_turns, self.elapsed_events, params.get_fatal_chance())
+			f.write(line)
 	
 	def clear(self):
 		self.elapsed_events = 0
@@ -451,16 +447,16 @@ current_event = 0
 imported = False
 current_type = EventType.Bloodbath
 context = None
+io_dir = Path(os.path.abspath(__file__)).parent / "../io"
 
 # Lists
 newly_dead = []
 acting_champions = []
 
-# Other?
+# Config
 FeastDay = 3			# day of the feast event, and start of the rise in death rate
 SPONSORSHIP = True		# is sponsorship turned on?
 VERBOSE = True			# if true, send messages to discord. If false, just print to logs
-# should some of this go into a class? YES!
 
 #		PREP FUNCTIONS
 
@@ -516,11 +512,8 @@ async def import_all():
 def import_list_of_champions():
 	global champions
 	imported = 0
-	filename = "io/cast_in.txt"
-	path = os.path.dirname(__file__)
-	path = os.path.join(os.path.split(path)[0], filename)
 
-	f = open(path, "r")
+	f = open(io_dir / "cast_in.txt", "r")
 	
 	print("Importing champions...")
 	line = f.readline()	# eat first line
@@ -561,12 +554,8 @@ def import_list_of_champions():
 def import_list_of_events():
 	import_limit = 1000
 	imported = 0
-	
-	filename = "io/events_in.txt"
-	path = os.path.dirname(__file__)
-	path = os.path.join(os.path.split(path)[0], filename)
 
-	f = open(path, "r", encoding="utf8")
+	f = open(io_dir / "events_in.txt", "r", encoding="utf8")
 	
 	print("Importing events...")
 	line = f.readline() # eat first line
@@ -1043,13 +1032,8 @@ def check_over():
 
 # append line to current game record
 def record(line):
-	filename = "io/record.txt"
-	path = os.path.dirname(__file__)
-	path = os.path.join(os.path.split(path)[0], filename)
-
-	f = open(path, 'a')
-	f.write(line)
-	f.close()
+	with open(io_dir / "record.txt", 'a') as f:
+		f.write(line)
 
 # read settings from .ini file
 def load_ini():

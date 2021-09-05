@@ -8,6 +8,7 @@ import os
 import aiohttp
 import math
 import importlib
+from pathlib import Path
 from datetime import datetime
 from PIL import Image
 from PIL import ImageEnhance
@@ -31,6 +32,7 @@ ERROR_CHANNEL = bot_info.ERROR_CHANNEL
 bot = commands.Bot(command_prefix='~', case_insensitive=True)
 bot.remove_command('help')
 context = None
+io_dir = Path(os.path.abspath(__file__)).parent / "../io"
 
 ####################### STORED DATA ################################
 GW_LINK = None
@@ -44,30 +46,17 @@ class Data:				# move to .ini file?
 	def write(self):
 		members = [attr for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")]
 
-		f = open(self.get_path(), "w")
-		for x in members:
-			name = x
-			num = getattr(self, name)
-			line = name + "," + str(num) + "\n"
-			f.write(line)
-		f.close()
-		pass
+		with open(io_dir / "data", "w") as f:
+			for name in members:
+				num = getattr(self, name)
+				line = name + "," + str(num) + "\n"
+				f.write(line)
 
 	def read(self):
-		f = open(self.get_path(), "r")
-		line = f.readline()
-		while(len(line) > 1):
-			x = line.split(",")
-			setattr(self, x[0], x[1][:-1])
-			line = f.readline()
-		f.close()
-		pass
-
-	def get_path(self):
-		filename = "io/data"
-		path = os.path.dirname(__file__)
-		path = os.path.join(os.path.split(path)[0], filename)
-		return path
+		with open(io_dir / "data", "r") as f:
+			for line in f:
+				x = line.split(",")
+				setattr(self, x[0], x[1][:-1])
 
 data = Data()
 
