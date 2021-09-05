@@ -7,6 +7,7 @@ import re
 import io
 import aiohttp
 import os
+import json
 import math
 import configparser
 from PIL import Image
@@ -139,7 +140,7 @@ class Champion:
 class Events:
 	events_structure = [[[] for j in range(len(EventType))] for i in range(2)]
 	# structure of all events in game
-	# events_structure[Is_Fatal][EventType] has list of events matching appropraite Is_Fatal and EventType
+	# events_structure[Is_Fatal][EventType][events] is list of events matching appropriate Is_Fatal and EventType
 
 	def about(self):
 		print("\nHarmless")
@@ -165,9 +166,8 @@ class Events:
 			print("error, no possible events")
 		return random.choice(possible_events)
 	
-	def add_event(self, new_event, type, fatal):
-		# error checking?
-		self.events_structure[fatal][type].append(new_event)
+	def add_event(self, new_event):
+		self.events_structure[new_event.fatal][new_event.type].append(new_event)
 	
 	def clear(self):
 		for x in self.events_structure[0]:
@@ -183,6 +183,7 @@ class Event:
 		self.killers = killers
 		self.killed = killed
 		self.raw_text = text
+		self.fatal = len(self.killed) > 0
 
 	def about(self):
 		print("\n" + self.raw_text)
@@ -457,6 +458,7 @@ acting_champions = []
 FeastDay = 3			# day of the feast event, and start of the rise in death rate
 SPONSORSHIP = True		# is sponsorship turned on?
 VERBOSE = True			# if true, send messages to discord. If false, just print to logs
+EVENTS_IN = ""			# input file for events
 
 #		PREP FUNCTIONS
 
@@ -497,12 +499,15 @@ async def prep_game(ctx):
 async def import_all():
 	global champions
 	global events
+	global EVENTS_IN
 
-	#champions = None
 	champions = Champions()
 	events = Events()
 
-	import_list_of_events()
+	if "json" in EVENTS_IN:		# Idk why I have this, just feels right until I delete the .txt stuff
+		import_json_of_events()
+	else:
+		import_list_of_events()
 	events.about()
 	import_list_of_champions()
 	await download_images(champions.roster)	# TODO: Skip when not VERBOSE
@@ -550,14 +555,37 @@ def import_list_of_champions():
 	
 	f.close()
 
-# get and sort events from file
+# get list of events from json file
+def import_json_of_events():
+	global events
+	imported = 0
+	events_in = {}
+	print("Importing events from .json...")
+	with open(io_dir / "events.json", "r") as f:
+		events_in = json.load(f)
+	
+	for type_str in events_in.keys():		# Day, night, etc
+		for result in events_in[type_str].keys():		# fatal, nonfatal
+			for numChampions in events_in[type_str][result]:	# 1, 2, 3 etc
+				for e in events_in[type_str][result][numChampions]:
+					# get proper EventType from string
+					type = EventType.Day
+					for t in EventType:
+						if(type_str in t.name):
+							type = t
+							break
+					events.add_event(Event(type, int(numChampions), e["Killers"], e["Killed"], e["Text"]))
+					imported += 1
+	print(f"Imported {imported} events")
+
+# get and sort events from txt file (OLD)
 def import_list_of_events():
 	import_limit = 1000
 	imported = 0
 
 	f = open(io_dir / "events_in.txt", "r", encoding="utf8")
 	
-	print("Importing events...")
+	print("Importing events from .txt...")
 	line = f.readline() # eat first line
 	line = f.readline()
 	while(len(line) > 1):
@@ -587,10 +615,8 @@ def import_list_of_events():
 		else:
 			killed = x[3].split(", ")
 		text = x[4].strip()
-		new_event = Event(type, numChampions, killers, killed, text)
-		
-		fatal = (len(killed) > 0)
-		events.add_event(new_event, type, fatal)
+
+		events.add_event(Event(type, numChampions, killers, killed, text))
 
 		line = f.readline()
 		imported += 1
@@ -1040,10 +1066,12 @@ def load_ini():
 	global FeastDay
 	global SPONSORSHIP
 	global VERBOSE
+	global EVENTS_IN
 
 	config = configparser.ConfigParser()
 	config.read('./io/HG.ini')
 	FeastDay = int(config['Settings']['FeastDay'])
 	SPONSORSHIP = config['Settings'].getboolean('SPONSORSHIP')
 	VERBOSE = config['Settings'].getboolean('VERBOSE')
+	EVENTS_IN = config['Settings']['EVENTS_IN']
 	
