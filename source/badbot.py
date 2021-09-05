@@ -4,6 +4,7 @@ from discord.ext import commands
 import random
 import asyncio
 import io
+import os
 import aiohttp
 import math
 import importlib
@@ -34,7 +35,7 @@ context = None
 ####################### STORED DATA ################################
 GW_LINK = None
 
-class Data:
+class Data:				# move to .ini file?
 	GW_link = None
 	test = "abc"
 	test2 = 123
@@ -42,10 +43,8 @@ class Data:
 	# these temp measures aren't going to scale at all.
 	def write(self):
 		members = [attr for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")]
-		#print(members)
-		#print(data)
 
-		f = open("data", "w")
+		f = open(self.get_path(), "w")
 		for x in members:
 			name = x
 			num = getattr(self, name)
@@ -55,7 +54,7 @@ class Data:
 		pass
 
 	def read(self):
-		f = open("io/data", "r")				# move this to the ini
+		f = open(self.get_path(), "r")
 		line = f.readline()
 		while(len(line) > 1):
 			x = line.split(",")
@@ -63,6 +62,12 @@ class Data:
 			line = f.readline()
 		f.close()
 		pass
+
+	def get_path(self):
+		filename = "io/data"
+		path = os.path.dirname(__file__)
+		path = os.path.join(os.path.split(path)[0], filename)
+		return path
 
 data = Data()
 
@@ -330,7 +335,7 @@ async def count(ctx):
 	if ctx.author.voice is not None:
 		voice_channel = ctx.author.voice.channel
 		vc = None
-		message = "VC exception occured"	# generic
+		message = "Generic VC exception occured"	# generic
 		try:	# this often doesn't complete still
 			out = "connecting to \"" + str(voice_channel.name) + "\" in \"" + str(voice_channel.guild.name) + "\"..."
 			print(out)
@@ -342,8 +347,11 @@ async def count(ctx):
 			print("Am I already in a channel? If not, try again")
 			await ctx.send("I might already be counting somewhere")
 			message = "ClientException: Already connected to a voice channel"
-		except:
-			print("exception occured")
+		except Exception as e:
+			print("other exception occured")
+			print(type(e))
+			print(e.args)
+			print(e)
 		if vc is None:
 			await ctx.message.add_reaction('❌')
 			await report_error(message)

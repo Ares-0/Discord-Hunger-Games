@@ -160,6 +160,8 @@ class Events:
 			if(x.numChampions <= max_champs):
 				if(x.get_count_killed() <= kill_limit):
 					possible_events.append(x)
+		if(len(possible_events) == 0):
+			print("error, no possible events")
 		return random.choice(possible_events)
 	
 	def add_event(self, new_event, type, fatal):
@@ -283,9 +285,9 @@ class Stats:
 		print("Elapsed Events: " + str(self.elapsed_events))
 		print("Fatal Chance: " + str(params.get_fatal_chance()))
 
-		filename = "stats.csv"
+		filename = "io/stats.csv"
 		path = os.path.dirname(__file__)
-		path = os.path.join(path, filename)
+		path = os.path.join(os.path.split(path)[0], filename)
 
 		f = open(path, 'a')
 		line = "{0}, {1}, {2}, {3}\n".format(champions.num, self.elapsed_turns, self.elapsed_events, params.get_fatal_chance())
@@ -642,7 +644,7 @@ async def advance_n(n):
 	# add check to make sure the game has been initialized (imported stuff etc)
 	# CANT EVEN SEND A MESSAGE TO YELL AT USER UNTIL THEY DO $START LMAO
 	if(champions.num < 1):
-		await send_embed("Error, no champions", None, None, 0xff0000)
+		await send_embed("Error, no champions", "", "", 0xff0000)
 		return
 
 
@@ -708,7 +710,7 @@ async def advance_n(n):
 		#	await send_gallery(0)
 
 		if(VERBOSE):
-			await send_embed(text, subtitle, None, 0x0000ff)
+			await send_embed(text, subtitle, "", 0x0000ff)
 
 		params.update_fatal_chance()
 
@@ -736,7 +738,7 @@ async def advance_n(n):
 		text = str(current_type) + " Over"
 		print(text)
 		if(VERBOSE):
-			await send_embed(text, None, None, 0x0000ff)
+			await send_embed(text, "", "", 0x0000ff)
 		
 		# announce dead at end of night and at end of bloodbath. Also, increment day
 		if(current_type is EventType.Night or current_type is EventType.Bloodbath):
@@ -812,7 +814,7 @@ async def check_for_winner():
 		link = winner.image_link
 		link = link[:-5] + link[-4:]
 		print(link)
-		await send_embed(text, None, link, 0x0000ff)		# image is compressed as shit but it's fine
+		await send_embed(text, "", link, 0x0000ff)		# image is compressed as shit but it's fine
 		if(os.path.exists("final.png")):
 			os.remove("final.png")
 		
@@ -1041,7 +1043,11 @@ def check_over():
 
 # append line to current game record
 def record(line):
-	f = open("record.txt", "a")
+	filename = "io/record.txt"
+	path = os.path.dirname(__file__)
+	path = os.path.join(os.path.split(path)[0], filename)
+
+	f = open(path, 'a')
 	f.write(line)
 	f.close()
 
