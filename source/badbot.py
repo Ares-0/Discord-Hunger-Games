@@ -7,6 +7,7 @@ import io
 import os
 import aiohttp
 import math
+import yaml
 import importlib
 from pathlib import Path
 from datetime import datetime
@@ -37,26 +38,25 @@ io_dir = Path(os.path.abspath(__file__)).parent / "../io"
 ####################### STORED DATA ################################
 GW_LINK = None
 
-class Data:				# move to .ini file?
-	GW_link = None
-	test = "abc"
-	test2 = 123
+class Data:
+	data = {}
 
-	# these temp measures aren't going to scale at all.
 	def write(self):
-		members = [attr for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")]
-
-		with open(io_dir / "data", "w") as f:
-			for name in members:
-				num = getattr(self, name)
-				line = name + "," + str(num) + "\n"
-				f.write(line)
+		with open(io_dir / "data.yml", "w") as f:
+			yaml.dump(self.data, f)
 
 	def read(self):
-		with open(io_dir / "data", "r") as f:
-			for line in f:
-				x = line.split(",")
-				setattr(self, x[0], x[1][:-1])
+		with open(io_dir / "data.yml", "r") as f:
+			self.data = yaml.safe_load(f)
+	
+	def get(self, key):
+		if key in self.data:
+			return self.data[key]
+		else:
+			return None
+	
+	def set(self, key, value):
+		self.data.update({key: value})
 
 data = Data()
 
@@ -205,10 +205,10 @@ async def check_gm(ctx):
 		await ctx.message.add_reaction(emoji)
 		return False
 
-# Prints a link to the current hunger games album (hardcoded fn)
+# Save or print the saved hg album link
 @bot.command()
-async def album(ctx):
-	await ctx.send("<https://imgur.com/a/uGV33o6>")
+async def album(ctx, *args):
+	await getset("album", ctx, *args)
 
 # TODO
 # function to reload the hg_bot.py module so I don't have to restart the whole bot if only hg_bot.py was changed
@@ -235,29 +235,33 @@ async def source(ctx):
 # Saves or prints the saved gw schedule
 @bot.command()
 async def gw(ctx, *args):
+	await getset("GW", ctx, *args)
+
+# Save or print user saved data
+async def getset(key, ctx, *args):
 	global data
 		
 	# if there is an attachment, save it's URL
 	if(len(ctx.message.attachments) > 0):
-		data.GW_link = ctx.message.attachments[0].url
+		data.set(key, ctx.message.attachments[0].url)
 		data.write()
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)
 	# if there is an argument, save the argument as URL
 	elif(len(args) > 0):
 		s = args[0].split("?")
-		data.GW_link = s[0]
+		data.set(key, s[0])
 		data.write()
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)
 	# if there is neither, print the saved data
 	else:
 		# nothing saved
-		if(data.GW_link is None):
+		if(data.get(key) is None):
 			await ctx.send("No link saved")
 		# print saved link
 		else:
-			await ctx.send(data.GW_link)
+			await ctx.send(data.get(key))
 
 # Saves or prints the saved gw schedule, but with some color manipulation
 @bot.command()
