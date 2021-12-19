@@ -8,6 +8,8 @@ import os
 import aiohttp
 import math
 import yaml
+import logging
+from datetime import datetime
 import importlib
 from pathlib import Path
 from datetime import datetime
@@ -22,6 +24,7 @@ from hg_bot import wipe
 from hg_bot import send_gallery
 from hg_bot import check_over
 from hg_bot import process_reaction
+from hg_bot import check_list_of_champions
 
 # Import this from bot_info or enter it yourself if this was from github.
 TOKEN = bot_info.TOKEN
@@ -34,6 +37,7 @@ bot = commands.Bot(command_prefix='~', case_insensitive=True)
 bot.remove_command('help')
 context = None
 io_dir = Path(os.path.abspath(__file__)).parent / "../io"
+logging.basicConfig(level=logging.INFO)
 
 ####################### STORED DATA ################################
 GW_LINK = None
@@ -210,10 +214,52 @@ async def check_gm(ctx):
 async def album(ctx, *args):
 	await getset("album", ctx, *args)
 
-# TODO
-# function to reload the hg_bot.py module so I don't have to restart the whole bot if only hg_bot.py was changed
+# Upload new cast_in.txt file
+@bot.command()
+async def cast(ctx):
+	if(not await check_gm(ctx)):
+		return
+	
+	if(len(ctx.message.attachments) > 0):
+		# check attatched file
+		attach = True
+		try:
+			await ctx.message.attachments[0].save(fp= io_dir/"tmp.txt")
+		except:
+			emoji = '❌'
+			await ctx.message.add_reaction(emoji)
+			await ctx.send("File upload error")
+			return
+		errs, err_str = check_list_of_champions("tmp.txt")
+	else:
+		# check current file
+		attach = False
+		print("checking current file")
+		errs, err_str = check_list_of_champions()
+
+	if errs == 0:
+		if attach:
+			# backup old file and slot in new one
+			try:
+				time = datetime.now().strftime("%y-%m-%d-%H-%M-%S")
+				os.rename(io_dir / "cast_in.txt", io_dir / f"cast_in{time}.txt")
+			except Exception as e:
+				print(e)
+				emoji = '❌'
+				await ctx.message.add_reaction(emoji)
+				await ctx.send("File save error, yell at Ares")
+			os.rename(io_dir / "tmp.txt", io_dir / "cast_in.txt")
+		emoji = '✅'
+		await ctx.message.add_reaction(emoji)
+	else:
+		emoji = '❌'
+		await ctx.message.add_reaction(emoji)
+		await ctx.send(f"Errors on {errs} lines\n```{err_str}```")
 
 #####################################################################
+
+# TODO
+# function to reload the hg_bot.py module so I don't have to restart the whole bot if only hg_bot.py was changed
 
 # List of commands
 @bot.command()
@@ -329,7 +375,8 @@ async def count(ctx):
 		try:	# this often doesn't complete still
 			out = "connecting to \"" + str(voice_channel.name) + "\" in \"" + str(voice_channel.guild.name) + "\"..."
 			print(out, flush=True, end='')
-			vc = await voice_channel.connect(timeout=5.0)
+			# vc = await voice_channel.connect(timeout=5.0)
+			vc = await asyncio.wait_for(voice_channel.connect(timeout=5.0), 10.0)
 		except asyncio.TimeoutError:
 			print("timed out")
 			message = "TimeoutError"

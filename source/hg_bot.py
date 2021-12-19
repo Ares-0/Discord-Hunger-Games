@@ -534,17 +534,13 @@ def import_list_of_champions():
 			continue
 		
 		#work
-		x = line.split("\t")
-		# remove erroneous \ts
-		while("" in x): 
-			x.remove("")
-		
-		# if the .png is there, remove it. Later operations require it to not be there
-		link = x[1]
-		if(x[1][-4:] == ".png"):
-			link = link[:-4]
+		x = check_champion_line(line.strip())
+		if x is None:
+			print(f"Skipping erroneous line: \"{line.strip()}\"")
+			line = f.readline()
+			continue
 
-		new_champ = Champion(x[0].strip(), link, Gender(int(x[2])), Status(0))
+		new_champ = Champion(x["name"], x["link"], Gender(x["gender"]), Status(0))
 		champions.add_champion(new_champ)
 		imported += 1
 		
@@ -554,6 +550,71 @@ def import_list_of_champions():
 		line = f.readline()
 	
 	f.close()
+
+# analyze and determine if cast_in.txt is error free
+def check_list_of_champions(filename: str = "cast_in.txt"):
+	f = open(io_dir / filename, "r")
+	error_count = 0
+	error_str = ""
+
+	# Ignore first line
+	line = f.readline()
+
+	# Check num line
+	line = f.readline()
+	try:
+		int(line)
+	except ValueError:
+		error_count += 1
+		str = f"Error: second line should contain number of entries. Instead: \"{line.strip()}\""
+		print(str)
+		error_str += ("\n" + str)
+
+	# Check champion lines
+	line = f.readline()
+	while(len(line) > 1):
+		# comment lines are fine
+		if(line.startswith('~')):
+			line = f.readline()
+			continue
+		
+		x = check_champion_line(line.strip())
+		if x is None:
+			error_count += 1
+			str = f"Error: champion line format incorrect. Line: \"{line.strip()}\""
+			print(str)
+			error_str += (f"\n\"{line.strip()}\"")
+		
+		line = f.readline()
+
+	# return result
+	print(f"Errors on {-1*error_count} lines")
+	return -1*error_count, error_str
+
+# parse and eror check single champion line
+def check_champion_line(line: str):
+	x = line.split("\t")
+	while("" in x): 
+		x.remove("")
+	
+	if len(x) != 3:
+		return None
+
+	# if the .png is there, remove it. Later operations require it to not be there
+	link = x[1]
+	if(x[1][-4:] == ".png"):
+		link = link[:-4]
+	
+	try:
+		g = int(x[2])
+	except ValueError:
+		return None
+
+	return {
+		"name": x[0].strip(),
+		"link": x[1],
+		"gender": g
+	}
 
 # get list of events from json file
 def import_json_of_events():
