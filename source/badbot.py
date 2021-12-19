@@ -66,6 +66,22 @@ data = Data()
 
 ####################### HUNGER GAMES ###############################
 
+# List of hunger games commands
+@bot.command()
+async def hg_help(ctx):
+	embed=discord.Embed(title="Sailor Mars Commands", description="Use '~' to trigger. Must be a gamemaster to execute")
+	embed.set_thumbnail(url="https://imgur.com/KoHvsJM.png")
+	embed.add_field(name="~ready", value="Prepares the game and displays the champions", inline=False)
+	embed.add_field(name="~advance <n>", value="Displays <n> events, or fewer if the round is ending", inline=False)
+	embed.add_field(name="~alive", value="Shows a gallery of the remaining champions", inline=False)
+	embed.add_field(name="~dead", value="Shows a gallery of the champions who have died", inline=False)
+	embed.add_field(name="~run", value="Executes a game to completion with no further input necessary, at max speed", inline=False)
+	embed.add_field(name="~reset", value="Reloads the settings, events, and cast list", inline=False)
+	embed.add_field(name="~cast", value="Saves attached cast.txt file. Throws errors if format is incorrect", inline=False)
+	embed.add_field(name="~check", value="Check 1: if user has GM permissions. Check 2: if channel has permissions for games", inline=False)
+	embed.add_field(name="~album <link>", value="If blank, display current album link. Otherwise, stores given link", inline=False)
+	await ctx.send(embed=embed)
+
 @bot.command()
 async def advance(ctx, *args):
 	global context
