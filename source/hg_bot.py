@@ -692,7 +692,7 @@ async def download_images(champs_list):
 	async with aiohttp.ClientSession() as session:
 		for x in champs_list:
 			# to do: get image from imgur or local from computer?
-			#print(x.name)
+			print(x.name)
 			async with session.get(x.image_link) as resp:
 				if resp.status != 200:
 					return await context.send('Could not download file...')
@@ -1019,6 +1019,7 @@ async def send_gallery(mode, *args):
 	if(mode == 0):
 		e_title = "Welcome to the Hunger Games!"
 		champs = champions.roster
+		des = f"{len(champs)} Entries!"
 	elif(mode == 1):
 		e_title = "Remaining Champions"
 		champs = champions.get_list_alive()
