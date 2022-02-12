@@ -41,7 +41,7 @@ class Games(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def advance(ctx, *args):
+    async def advance(self, ctx, *args):
         global context
         if(not await check_channel(ctx) or not await check_gm(ctx)):
             return
@@ -54,7 +54,7 @@ class Games(commands.Cog):
             await advance_n(n)
 
     @commands.command()
-    async def reset(ctx):
+    async def reset(self, ctx):
         if(not await check_channel(ctx) or not await check_gm(ctx)):
             return
         wipe()
