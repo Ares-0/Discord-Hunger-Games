@@ -263,7 +263,7 @@ class Event:
 		line = "{:.3f}".format(params.get_fatal_chance())
 		if(SPONSORSHIP):
 			line = line + " ({:.3f}) ".format(reactions.get_fatal_chance(event_champs[0]))
-		line = line + "    " + msg + "\n"
+		line = line + "    " + msg
 		record(line)
 
 		if(VERBOSE):
@@ -558,7 +558,10 @@ def check_list_of_champions(filename: str = "cast_in.txt"):
 	error_str = ""
 
 	# Ignore first line
-	line = f.readline()
+	try:
+		line = f.readline()
+	except UnicodeDecodeError:
+		return -1, "Unicode error in input file"
 
 	# Check num line
 	line = f.readline()
@@ -986,7 +989,7 @@ async def send_event_image(event_champs, msg, color):
 		i += 1
 	im_final.save("final.png")
 	
-	embedVar = discord.Embed(title=msg, color=color)
+	embedVar = discord.Embed(title=msg[-256:], color=color)
 	if(endgame):
 		embedVar.set_footer(text='React to support living champions')
 	file=discord.File("final.png", filename="final.png")

@@ -75,5 +75,6 @@ async def on_ready():
 	bot.load_extension("cogs.utils")
 	bot.load_extension("cogs.server")
 	bot.load_extension("cogs.games")
+	bot.load_extension("cogs.personal")
 
 bot.run(TOKEN)

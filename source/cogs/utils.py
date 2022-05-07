@@ -67,6 +67,7 @@ class Utils(commands.Cog):
     async def leave(self, ctx):
         voice_channel = self.bot.voice_clients
         for x in voice_channel:
+            print(f"leaving {x.channel.name}")
             await x.disconnect()
 
     @commands.command()
@@ -121,10 +122,17 @@ async def getset(key, ctx, *args):
 		data.write()
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)
-	# if there is an argument, save the argument as URL
-	elif(len(args) > 0):
+	# if there is a single argument, save the argument as URL
+	elif(len(args) == 1):
 		s = args[0].split("?")
 		data.set(key, s[0])
+		data.write()
+		emoji = '✅'
+		await ctx.message.add_reaction(emoji)
+	# If many args, join and save them
+	elif(len(args) > 1):
+		s = ' '.join(args)
+		data.set(key, s)
 		data.write()
 		emoji = '✅'
 		await ctx.message.add_reaction(emoji)

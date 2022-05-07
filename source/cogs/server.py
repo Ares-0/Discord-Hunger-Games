@@ -30,7 +30,10 @@ class Server(commands.Cog):
                 print("timed out")
                 message = "TimeoutError"
                 await ctx.send("I timed out, try trying again (no promises)")
-                await vc.disconnect()
+                for voice in self.bot.voice_clients:
+                    if(voice.server == ctx.message.server):
+                        print(f"leaving {voice.channel.name}")
+                        await voice.disconnect()
             except discord.ClientException:
                 print("Am I already in a channel? If not, try again")
                 await ctx.send("I might already be counting somewhere")
@@ -65,10 +68,15 @@ class Server(commands.Cog):
         else:
             await ctx.send("You are not in a voice channel.")
     
-    # # Saves or prints the saved gw schedule
+    # Saves or prints the saved gw schedule
     @commands.command()
     async def gw(self, ctx, *args):
-    	await getset("GW", ctx, *args)
+        await getset("GW", ctx, *args)
+    
+    # Saves or prints the saved gw schedule PART 2
+    @commands.command()
+    async def eugw(self, ctx, *args):
+        await getset("EUGW", ctx, *args)
 
 # Return the mp3 file used for counting
 def get_count_file():
