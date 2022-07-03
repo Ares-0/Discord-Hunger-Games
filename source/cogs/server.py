@@ -77,6 +77,25 @@ class Server(commands.Cog):
     @commands.command()
     async def eugw(self, ctx, *args):
         await getset("EUGW", ctx, *args)
+    
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        ctx = await self.bot.get_context(message)
+        if "teppen" in message.content.lower() or "tepen" in message.content.lower():
+            await pedantic_bangs_teppen(ctx, message)
+        
+        if "keijo" in message.content.lower():
+            await pedantic_bangs_keijo(ctx, message)
+
+async def pedantic_bangs_teppen(ctx, message):
+    if f"Teppen{'!'*15}" not in message.content or f"Teppen{'!'*16}" in message.content:
+        # if random.random() < 0.05:
+        await ctx.send(f"Ahem, perhaps you meant Teppen{'!'*15}")
+
+async def pedantic_bangs_keijo(ctx, message):
+    if f"Keijo{'!'*8}" not in message.content or f"Keijo{'!'*9}" in message.content:
+        # if random.random() < 0.05:
+        await ctx.send(f"Ahem, perhaps you meant Keijo{'!'*8}")
 
 # Return the mp3 file used for counting
 def get_count_file():
