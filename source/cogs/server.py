@@ -2,6 +2,7 @@ import asyncio
 import discord
 import os
 import random
+import re
 
 from pathlib import Path
 from discord.ext import commands
@@ -81,21 +82,22 @@ class Server(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         ctx = await self.bot.get_context(message)
-        if "teppen" in message.content.lower() or "tepen" in message.content.lower():
-            await pedantic_bangs_teppen(ctx, message)
+        # if message.author.nick == "Ares":
+        content = " " + message.content.lower()
+        if " teppen" in content or " tepen" in content:
+            await pedantic_bangs(ctx, message, "Teppen", 15)
         
-        if "keijo" in message.content.lower():
-            await pedantic_bangs_keijo(ctx, message)
+        if " keijo" in content:
+            await pedantic_bangs(ctx, message, "Keijo", 8)
 
-async def pedantic_bangs_teppen(ctx, message):
-    if f"Teppen{'!'*15}" not in message.content or f"Teppen{'!'*16}" in message.content:
-        # if random.random() < 0.05:
-        await ctx.send(f"Ahem, perhaps you meant Teppen{'!'*15}")
+async def pedantic_bangs(ctx, message, text, num):
+    # Just skip links. Its fine (technically redundant now)
+    if len(re.findall(f"http\S*{text.lower}", message.content.lower())) > 0:
+        return
 
-async def pedantic_bangs_keijo(ctx, message):
-    if f"Keijo{'!'*8}" not in message.content or f"Keijo{'!'*9}" in message.content:
-        # if random.random() < 0.05:
-        await ctx.send(f"Ahem, perhaps you meant Keijo{'!'*8}")
+    # If too little or too many, correct
+    if f"{text}{'!'*num}" not in message.content or f"{text}{'!'*(num+1)}" in message.content:
+        await ctx.send(f"Ahem, perhaps you meant {text}{'!'*num}")
 
 # Return the mp3 file used for counting
 def get_count_file():
