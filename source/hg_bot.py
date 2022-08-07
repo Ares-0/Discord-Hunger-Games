@@ -301,7 +301,7 @@ class Reactions:
 	users = []
 	reactions = [[0 for i in range(20)] for j in range(8)]
 	totals = []
-	limit = 1
+	limit = 2
 
 	def fill_champions(self, champs):
 		self.champions.clear()

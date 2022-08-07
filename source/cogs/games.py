@@ -81,18 +81,18 @@ class Games(commands.Cog):
     async def cast(self, ctx):
         if(not await check_gm(ctx)):
             return
-        
+
         if(len(ctx.message.attachments) > 0):
             # check attatched file
             attach = True
             try:
-                await ctx.message.attachments[0].save(fp= io_dir/"tmp.txt")
+                await ctx.message.attachments[0].save(fp= io_dir/"cast.txt")
             except:
                 emoji = '❌'
                 await ctx.message.add_reaction(emoji)
                 await ctx.send("File upload error")
                 return
-            errs, err_str = check_list_of_champions("tmp.txt")
+            errs, err_str = check_list_of_champions("cast.txt")
         else:
             # check current file
             attach = False
@@ -157,33 +157,33 @@ class Games(commands.Cog):
         global context
         if(not await check_channel(ctx) or not await check_gm(ctx)):
             return
-        
+
         context = ctx
         async with ctx.typing():
             await prep_game(ctx)
-        
+
         emoji = '✅'
         await ctx.message.add_reaction(emoji)
 
 # check if channel is appropriate Hunger Games channel
 async def check_channel(ctx):
-	if(ctx.message.channel.id in HG_CHANNEL):
-		return True
-	else:
-		emoji = '❌'
-		print("bad channel attempted")
-		await ctx.message.add_reaction(emoji)
-		return False
+    if(ctx.message.channel.id in HG_CHANNEL):
+        return True
+    else:
+        emoji = '❌'
+        print("bad channel attempted")
+        await ctx.message.add_reaction(emoji)
+        return False
 
 # check if user is appropriate hunger games game master
 async def check_gm(ctx):
-	if(ctx.message.author.id in GM):
-		return True
-	else:
-		emoji = '✖️'
-		print("bad author attempted")
-		await ctx.message.add_reaction(emoji)
-		return False
+    if(ctx.message.author.id in GM):
+        return True
+    else:
+        emoji = '✖️'
+        print("bad author attempted")
+        await ctx.message.add_reaction(emoji)
+        return False
 
 def setup(bot):
     bot.add_cog(Games(bot))
