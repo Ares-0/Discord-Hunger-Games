@@ -47,16 +47,16 @@ class Server(commands.Cog):
                 await ctx.send("Something WEIRD happened")
             if vc is None:
                 await ctx.message.add_reaction('❌')
-                await report_error(message)
+                await report_error(self.bot, message)
                 return
             
             print("done")
             await ctx.message.add_reaction('✅')
             file = get_count_file()
             try:
-                vc.play(discord.FFmpegPCMAudio(executable="C:/Program Files/ffmpeg/bin/ffmpeg.exe", source=file))
+                vc.play(discord.FFmpegPCMAudio(executable="/usr/bin/ffmpeg", source=file))
             except Exception as e:
-                report_error("error connecting to voice chat")
+                await report_error(self.bot, f"error connecting to voice chat:\n{e.__repr__()}")
                 print(e)
                 await ctx.message.add_reaction('❌')
                 await ctx.message.clear_reaction('✅')
