@@ -70,6 +70,11 @@ class Utils(commands.Cog):
             print(f"leaving {x.channel.name}")
             await x.disconnect()
 
+    # rest emoji reacting
+    @commands.command()
+    async def emote(self, ctx):
+        await try_react(ctx, '✅')
+
     @commands.command()
     async def quit(self, ctx):
         if(ctx.message.author.id is not ME):
@@ -91,6 +96,14 @@ async def report_error(bot, message):
     await channel.send(
         f"{(await bot.fetch_user(ME)).mention}, an error has occured:\n{message}"
     )
+
+async def try_react(ctx, emoji):
+    try:
+        await ctx.message.add_reaction(emoji)
+    except discord.Forbidden as e:
+        pass
+    except Exception as e:
+        print(e)
 
 class Data:
 	data = {}
@@ -120,22 +133,19 @@ async def getset(key, ctx, *args):
 	if(len(ctx.message.attachments) > 0):
 		data.set(key, ctx.message.attachments[0].url)
 		data.write()
-		emoji = '✅'
-		await ctx.message.add_reaction(emoji)
+		await try_react(ctx, '✅')
 	# if there is a single argument, save the argument as URL
 	elif(len(args) == 1):
 		s = args[0].split("?")
 		data.set(key, s[0])
 		data.write()
-		emoji = '✅'
-		await ctx.message.add_reaction(emoji)
+		await try_react(ctx, '✅')
 	# If many args, join and save them
 	elif(len(args) > 1):
 		s = ' '.join(args)
 		data.set(key, s)
 		data.write()
-		emoji = '✅'
-		await ctx.message.add_reaction(emoji)
+		await try_react(ctx, '✅')
 	# if there is neither, print the saved data
 	else:
 		# nothing saved

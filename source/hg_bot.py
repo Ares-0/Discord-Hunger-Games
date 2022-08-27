@@ -1134,9 +1134,8 @@ def load_ini():
 	global EVENTS_IN
 
 	config = configparser.ConfigParser()
-	config.read('./io/HG.ini')
+	config.read(io_dir / 'HG.ini')
 	FeastDay = int(config['Settings']['FeastDay'])
 	SPONSORSHIP = config['Settings'].getboolean('SPONSORSHIP')
 	VERBOSE = config['Settings'].getboolean('VERBOSE')
 	EVENTS_IN = config['Settings']['EVENTS_IN']
-	

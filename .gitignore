@@ -1,0 +1,16 @@
+.vscode
+*.meta
+*.temp
+*.support
+
+/io
+
+*pycache*
+# remove
+*bot_info*
+# move to .temp
+final.png
+
+# These two will never be pushed
+/io/cast_in.txt
+/io/events.json
