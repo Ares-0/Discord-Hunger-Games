@@ -6,7 +6,7 @@ import re
 
 from pathlib import Path
 from discord.ext import commands
-from cogs.utils import report_error, getset
+from cogs.utils import report_error, getset, try_react
 
 io_dir = Path(os.path.abspath(__file__)).parent / "../../io"
 
@@ -46,20 +46,20 @@ class Server(commands.Cog):
                 print(e)
                 await ctx.send("Something WEIRD happened")
             if vc is None:
-                await ctx.message.add_reaction('❌')
+                await try_react(ctx, '❌')
                 await report_error(self.bot, message)
                 return
             
             print("done")
-            await ctx.message.add_reaction('✅')
+            await try_react(ctx, '✅')
             file = get_count_file()
             try:
                 vc.play(discord.FFmpegPCMAudio(executable="/usr/bin/ffmpeg", source=file))
             except Exception as e:
                 await report_error(self.bot, f"error connecting to voice chat:\n{e.__repr__()}")
                 print(e)
-                await ctx.message.add_reaction('❌')
-                await ctx.message.clear_reaction('✅')
+                await try_react(ctx, '❌')
+                await try_react(ctx, '✅')
                 await vc.disconnect()
 
             # Sleep while audio is playing.
