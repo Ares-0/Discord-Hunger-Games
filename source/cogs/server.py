@@ -91,6 +91,10 @@ class Server(commands.Cog):
             await pedantic_bangs(ctx, message, "Keijo", 8)
 
 async def pedantic_bangs(ctx, message, text, num):
+    # Dont correct every time
+    if random.random() < 0.8:
+        return
+
     # Just skip links. Its fine (technically redundant now)
     if len(re.findall(f"http\S*{text.lower}", message.content.lower())) > 0:
         return

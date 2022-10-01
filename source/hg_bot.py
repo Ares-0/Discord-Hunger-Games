@@ -408,7 +408,7 @@ class Params:
 		#self.fatal_chance = 0.1*math.log2(x/10+1)+0.2
 
 		# y(x) = x/200 + 0.2
-		self.fatal_chance = x/400 + 0.15
+		self.fatal_chance = x/275 + 0.15
 
 		# add day / night bias
 		bias = 0.03 #* random.random()
