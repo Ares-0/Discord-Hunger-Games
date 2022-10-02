@@ -45,11 +45,11 @@ class EventType(IntEnum):
 		next_type = [EventType.Day, EventType.Night, EventType.Day, EventType.Night, EventType.Night, EventType.Night, EventType.Night]
 		return next_type[self]
 
-	def title(self):
+	def title(self, day):
 		title = [
 			"Bloodbath",
-			"DAY " + str(current_day),
-			"NIGHT " + str(current_day),
+			f"DAY {day}",
+			f"NIGHT {day}",
 			"Return to the Cornocopia",
 			"KIMI NO SEI",
 			"On that day",
@@ -259,25 +259,6 @@ class Event:
 	def get_count_killed(self):
 		return len(self.killed)
 
-	async def print_event(self, event_champs):
-		global context
-		global params
-		global VERBOSE
-
-		msg = self.get_final_text(event_champs)
-		print(msg)
-		color = 0x00ff00
-		if(len(self.killed) > 0):
-			color = 0xff0000
-		
-		line = "{:.3f}".format(params.get_fatal_chance())
-		if(SPONSORSHIP):
-			line = line + " ({:.3f}) ".format(reactions.get_fatal_chance(event_champs[0]))
-		line = line + "    " + msg
-		record(line)
-
-		if(VERBOSE):
-			await send_event_image(event_champs, msg, color)
 
 # Collection of statistics
 class Stats:
@@ -419,40 +400,8 @@ class Params:
 		return self.fatal_chance
 	
 	# called at the start of new turns
-	def update_fatal_chance(self):
-		global champions
-		global current_type
-		global stats
-		global FeastDay
-
-		# always calculating the chance based on those alive is handy
-		x = champions.get_count_alive()
-		
-		# y(x) = 0.1*log2(x/10+1)+0.2
-		#self.fatal_chance = 0.1*math.log2(x/10+1)+0.2
-
-		# y(x) = x/200 + 0.2
-		self.fatal_chance = x/275 + 0.15
-
-		# add day / night bias
-		bias = 0.03 #* random.random()
-		if(current_type is EventType.Day):
-			self.fatal_chance += bias
-		if(current_type is EventType.Night):
-			self.fatal_chance -= bias
-		
-		# apply floor to value
-		self.fatal_chance = max(0.20, self.fatal_chance)
-
-		# increase as rounds continue past the feast
-		if(current_day > FeastDay):
-			self.fatal_chance += 0.04*(stats.elapsed_turns - FeastDay*2+2)
-		
-		# forget all that actually if it's a special round
-		if(current_type > EventType.Feast):
-			self.fatal_chance = 0.4
-
-		print(self.fatal_chance)
+	def update_fatal_chance(self, chance):
+		self.fatal_chance = chance
 
 # An instance of a single game
 class Game:
@@ -482,7 +431,7 @@ class Game:
 		self.endgame = False
 		self.current_day = 0
 		self.current_event = 0
-		self.current_event_type = EventType.Bloodbath
+		self.current_type = EventType.Bloodbath
 		self.newly_dead = []
 		self.acting_champions = []
 
@@ -492,7 +441,7 @@ class Game:
 
 	async def prep_game(self):
 		self.reset()
-		await self.download_images(champions.roster)
+		await self.download_images(self.champions.roster)
 		await self.send_gallery("all")
 
 	async def send_gallery(self, mode, *args):
@@ -512,17 +461,17 @@ class Game:
 		# Grab the appropriate champions
 		if(mode == "all"):
 			e_title = "Welcome to the Hunger Games!"
-			champs = champions.roster
+			champs = self.champions.roster
 			des = f"{len(champs)} Entries!"
 		elif(mode == "alive"):
 			e_title = "Remaining Champions"
-			champs = champions.get_list_alive()
+			champs = self.champions.get_list_alive()
 		elif(mode == "dead"):
 			e_title = "Passed Champions"
-			champs = champions.get_list_dead()
+			champs = self.champions.get_list_dead()
 		elif(mode == "other"):
 			e_title = args[0]
-			champs = champions.get_list_alive()
+			champs = self.champions.get_list_alive()
 			des = args[1]
 		else:
 			print("Error") # raise exception
@@ -706,330 +655,325 @@ class Game:
 	def check_over(self):
 		return self.game_over
 
+	async def advance_n(self, n):
+		"""advance by N events, showing turn starts and ends if need be"""
+		if(self.game_over):
+			return
 
+		# add check to make sure the game has been initialized (imported stuff etc)
+		# CANT EVEN SEND A MESSAGE TO YELL AT USER UNTIL THEY DO $START LMAO
+		if len(self.champions) < 1:
+			await self.send_embed("Error, no champions", "", "", 0xff0000)
+			return
 
-#		GLOBALS
+		# If start of turn, do some setup
+		if self.current_event == 0:			# maybe move to another function
 
-champions = Champions()
-events = Events()
-stats = Stats()
-reactions = Reactions()
-params = Params()
+			self.stats.increment_turn()
+			self.acting_champions = self.champions.get_list_alive()
+			random.shuffle(self.acting_champions)
+			self.reactions.update_count()
 
-# Progress
-game_over = False
-endgame = False
-current_day = 0
-current_event = 0
-imported = False
-current_type = EventType.Bloodbath
-context = None
+			# In final 8, start accepting emotes as sponsorship
+			if(self.params.SPONSORSHIP and not self.endgame and len(self.acting_champions) <= 8):
+				# print message
+				self.endgame = True
+				print("final 8")
+				record("\nfinal 8")
+				await self.send_gallery(3, "Final {0}".format(len(self.acting_champions)), "From now on, react to events to offer your sponsorship to these champions.")
+				self.reactions.fill_champions(self.acting_champions)
+				return		# prompt for another 'advance n'
 
+			if(self.endgame):
+				self.reactions.about()
 
-# Lists
-newly_dead = []
-acting_champions = []
+			# decide round type
 
-# Config
-FeastDay = 3			# day of the feast event, and start of the rise in death rate
-SPONSORSHIP = True		# is sponsorship turned on?
-VERBOSE = True			# if true, send messages to discord. If false, just print to logs
-EVENTS_IN = ""			# input file for events
-
-
-#		PROGRESS FUNCTIONS
-
-# advance by N events, showing turn starts and ends if need be
-async def advance_n(n):
-	global acting_champions
-	global current_event
-	global current_day
-	global current_type
-	global game_over
-	global endgame
-	global reactions
-
-	if(game_over):
-		return
-
-	# add check to make sure the game has been initialized (imported stuff etc)
-	# CANT EVEN SEND A MESSAGE TO YELL AT USER UNTIL THEY DO $START LMAO
-	if(champions.num < 1):
-		await send_embed("Error, no champions", "", "", 0xff0000)
-		return
-
-
-	# If start of turn, do some setup
-	if(current_event == 0):			# maybe move to another function
-		global stats
-		global params
-		global SPONSORSHIP
-		global FeastDay
-
-		stats.increment_turn()
-		acting_champions = champions.get_list_alive()
-		random.shuffle(acting_champions)
-		reactions.update_count()
-		
-		# In final 8, start accepting emotes as sponsorship
-		if(SPONSORSHIP and not endgame and len(acting_champions) <= 8):
-			# print message
-			endgame = True
-			print("final 8")
-			record("\nfinal 8")
-			await send_gallery(3, "Final {0}".format(len(acting_champions)), "From now on, react to events to offer your sponsorship to these champions.")
-			reactions.fill_champions(acting_champions)
-			return		# prompt for another 'advance n'
-
-		if(endgame):
-			reactions.about()
-
-		# decide round type
-
-		# special cases
-		# first type is bloodbath
-		if(current_day == 0):
-			current_type = EventType.Bloodbath
-		# feast on feastday
-		elif (current_type is EventType.Day and current_day is FeastDay):
-			current_type = EventType.Feast
-		# possibly select a special round
-		elif (current_type is EventType.Day):
-			# first, if there will be a special round
-			if(random.random() < 0.85):
-				current_type = EventType.Night
-			# then what special round it is
+			# special cases
+			# first type is bloodbath
+			if(self.current_day == 0):
+				self.current_type = EventType.Bloodbath
+			# feast on feastday
+			elif (self.current_type is EventType.Day and self.current_day is self.params.FeastDay):
+				self.current_type = EventType.Feast
+			# possibly select a special round
+			elif (self.current_type is EventType.Day):
+				# first, if there will be a special round
+				if(random.random() < 0.85):
+					self.current_type = EventType.Night
+				# then what special round it is
+				else:
+					# get list of special rounds
+					arena = []
+					for t in EventType:
+						if(t > EventType.Feast):
+							arena.append(t)
+					self.current_type = arena[int(random.random()*len(arena))]	# select from list
 			else:
-				# get list of special rounds
-				arena = []
-				for t in EventType:
-					if(t > EventType.Feast):
-						arena.append(t)
-				current_type = arena[int(random.random()*len(arena))]	# select from list
+				# normal next cases
+				self.current_type = self.current_type.next()
+
+			text = self.current_type.title(self.current_day)
+			subtitle = self.current_type.subtitle()
+			print(text)
+			left = self.champions.get_count_alive()
+			record("\n" + text + "  " + str(left) + " alive\n")
+
+			# depends on if I want this after ~ready or ~advance
+			#if(self.current_type is EventType.Bloodbath):
+			#	await send_gallery(0)
+
+			if(self.params.VERBOSE):
+				await self.send_embed(text, subtitle, "", 0x0000ff)
+
+			self.params.update_fatal_chance(self.get_fatal_chance())
+
+			# maybe always have new turn be its own prompt
+			self.current_event += 1
+			return
+
+		# advance up to as many turns as the user requested
+		advanced = 0
+		while(len(self.acting_champions) > 0 and advanced < n):
+			# make sure that the last event on the last remaining champion is not fatal
+			await self.run_event(self.acting_champions, self.current_type)
+			advanced += 1
+			self.current_event += 1
+
+		print("done advancing")
+		# check if game is over
+		await self.check_for_winner()
+
+		# if this turn is over, set up next turn
+		if(len(self.acting_champions) == 0 and self.game_over is False):	
+			self.current_event = 0
+
+			# possibly move this to just night / bloodbath
+			text = str(self.current_type) + " Over"
+			print(text)
+			if(self.params.VERBOSE):
+				await self.send_embed(text, "", "", 0x0000ff)
+
+			# announce dead at end of night and at end of bloodbath. Also, increment day
+			if(self.current_type is EventType.Night or self.current_type is EventType.Bloodbath):
+				self.current_day += 1
+				await self.send_newly_dead()
+
+	def get_fatal_chance(self):
+		# always calculating the chance based on those alive is handy
+		x = self.champions.get_count_alive()
+		
+		# y(x) = 0.1*log2(x/10+1)+0.2
+		#self.fatal_chance = 0.1*math.log2(x/10+1)+0.2
+
+		# y(x) = x/200 + 0.2
+		fatal_chance = x/275 + 0.15
+
+		# add day / night bias
+		bias = 0.03 #* random.random()
+		if(self.current_type is EventType.Day):
+			fatal_chance += bias
+		if(self.current_type is EventType.Night):
+			fatal_chance -= bias
+		
+		# apply floor to value
+		fatal_chance = max(0.20, fatal_chance)
+
+		# increase as rounds continue past the feast
+		if(self.current_day > self.params.FeastDay):
+			fatal_chance += 0.04*(self.stats.elapsed_turns - self.params.FeastDay*2+2)
+		
+		# forget all that actually if it's a special round
+		if(self.current_type > EventType.Feast):
+			fatal_chance = 0.4
+
+		print(fatal_chance)
+		return fatal_chance
+
+	async def run_event(self, acting_list, type):
+		"""setup and run a single event featuring 1 or more champions"""
+		self.stats.increment_event()	
+		
+		# Get fatal chance of this event
+		num_alive = self.champions.get_count_alive()
+		
+		if(self.params.SPONSORSHIP and num_alive <= 8):
+			chance = self.reactions.get_fatal_chance(acting_list[-1])
 		else:
-			# normal next cases
-			current_type = current_type.next()
+			chance = self.params.get_fatal_chance()
+		fatal = random.random() < chance
 
-		text = current_type.title()
-		subtitle = current_type.subtitle()
-		print(text)
-		left = champions.get_count_alive()
-		record("\n" + text + "  " + str(left) + " alive\n")
+		champions_remaining = len(acting_list)	# event must not exceed # of champions left
+		if(num_alive <= 1):
+			fatal = False
 
-		# depends on if I want this after ~ready or ~advance
-		#if(current_type is EventType.Bloodbath):
-		#	await send_gallery(0)
+		# don't kill everyone if these are the only champions left
+		kill_limit = champions_remaining
+		if(num_alive == champions_remaining):
+			kill_limit -= 1
 
-		if(VERBOSE):
-			await send_embed(text, subtitle, "", 0x0000ff)
+		# select an event from the appropriate list
+		this_event = self.events.get_random_event(champions_remaining, type, fatal, kill_limit)
 
-		params.update_fatal_chance()
+		# pull champions
+		event_champs = []
+		for x in range(0, this_event.numChampions):
+			event_champs.append(acting_list.pop())
 
-		# maybe always have new turn be its own prompt
-		current_event += 1
-		return
-	
-	# advance up to as many turns as the user requested
-	advanced = 0
-	while(len(acting_champions) > 0 and advanced < n):
-		# make sure that the last event on the last remaining champion is not fatal
-		await run_event(acting_champions, current_type)
-		advanced += 1
-		current_event += 1
+		# mark 'killed' as dead (has to happen before display for ease)
+		for x in this_event.killed:
+			dead = event_champs[int(x[6:])-1] # get N from "PlayerN"
+			dead.set_status_dead()
+			self.newly_dead.append(dead)
 
-	print("done advancing")
-	# check if game is over
-	await check_for_winner()
+		# display event
+		await self.print_event(this_event, event_champs)
 
-	# if this turn is over, set up next turn
-	if(len(acting_champions) == 0 and game_over is False):	
-		current_event = 0
+	async def check_for_winner(self):
+		"""Check if one champion is left, and announce if so"""
+		global champions
+		global game_over
+		global context
 
-		# possibly move this to just night / bloodbath
-		text = str(current_type) + " Over"
-		print(text)
-		if(VERBOSE):
-			await send_embed(text, "", "", 0x0000ff)
-		
-		# announce dead at end of night and at end of bloodbath. Also, increment day
-		if(current_type is EventType.Night or current_type is EventType.Bloodbath):
-			current_day += 1
-			await send_newly_dead()
-
-# setup and run a single event featuring 1 or more champions
-async def run_event(acting_list, type):
-	global stats
-	global reactions
-	global params
-	stats.increment_event()	
-	
-	# Get fatal chance of this event
-	num_alive = champions.get_count_alive()
-	
-	if(SPONSORSHIP and num_alive <= 8):
-		chance = reactions.get_fatal_chance(acting_list[-1])
-	else:
-		chance = params.get_fatal_chance()
-	fatal = random.random() < chance
-
-	champions_remaining = len(acting_list)	# event must not exceed # of champions left
-	if(num_alive <= 1):
-		fatal = False
-
-	# don't kill everyone if these are the only champions left
-	kill_limit = champions_remaining
-	if(num_alive == champions_remaining):
-		kill_limit -= 1
-
-	# select an event from the appropriate list
-	this_event = events.get_random_event(champions_remaining, type, fatal, kill_limit)
-
-	# pull champions
-	event_champs = []
-	for x in range(0, this_event.numChampions):
-		event_champs.append(acting_list.pop())
-
-	# mark 'killed' as dead (has to happen before display for ease)
-	for x in this_event.killed:
-		dead = event_champs[int(x[6:])-1]
-		dead.set_status_dead()
-		newly_dead.append(dead)
-
-	# display event
-	await this_event.print_event(event_champs)
-	# TODO
-	# give 'killers' a point
-
-# Check if one champion is left, and announce if so
-async def check_for_winner():
-	global champions
-	global game_over
-	global context
-
-	alive = champions.get_list_alive()
-	if(len(alive) > 1):
-		return False
-	else:
-		game_over = True
-		if(len(alive) < 1):
-			print("Error, no one survived")
-			await context.send("No winners, {0}".format(context.author.mention))
+		alive = champions.get_list_alive()
+		if(len(alive) > 1):
+			return False
+		else:
+			game_over = True
+			if(len(alive) < 1):
+				print("Error, no one survived")
+				await context.send("No winners, {0}".format(context.author.mention))
+				return True
+			winner = alive[0]
+			text = "The winner is: " + winner.name
+			print(text)
+			
+			line = str(params.get_fatal_chance()) + "    " + text + "\n"
+			record(line)
+			
+			link = winner.image_link
+			link = link[:-5] + link[-4:]
+			print(link)
+			await send_embed(text, "", link, 0x0000ff)		# image is compressed as shit but it's fine
+			if(os.path.exists("final.png")):
+				os.remove("final.png")
+			
+			# prep stats and stuff
+			stats.about()
 			return True
-		winner = alive[0]
-		text = "The winner is: " + winner.name
-		print(text)
+
+	# MESSAGE FUNCTIONS
+	async def print_event(self, event: Event, event_champs):
+		msg = event.get_final_text(event_champs)
+		print(msg)
+		color = 0x00ff00
+		if(len(event.killed) > 0):
+			color = 0xff0000
 		
-		line = str(params.get_fatal_chance()) + "    " + text + "\n"
+		line = "{:.3f}".format(self.params.get_fatal_chance())
+		if(self.params.SPONSORSHIP and self.endgame):
+			line = line + " ({:.3f}) ".format(self.reactions.get_fatal_chance(event_champs[0]))
+		line = line + "    " + msg
 		record(line)
+
+		if(self.params.VERBOSE):
+			await self.send_event_image(event_champs, msg, color)
+
+	async def send_embed(self, title, subtitle, image_url, rgb):
+		"""create and send a simple embed"""
+		if(self.context is None):
+			print("No context yet")
+			return
+
+		if(rgb is None):
+			e_color = 0x00ff00
+		else:
+			e_color = rgb
+		embedVar = discord.Embed(title=title, color=e_color, description=subtitle)
+
+		if(image_url is not None):
+			#embedVar.set_image(url='https://i.imgur.com/wSTFkRM.png')
+			embedVar.set_image(url=image_url)
 		
-		link = winner.image_link
-		link = link[:-5] + link[-4:]
-		print(link)
-		await send_embed(text, "", link, 0x0000ff)		# image is compressed as shit but it's fine
-		if(os.path.exists("final.png")):
-			os.remove("final.png")
+		await self.context.send(embed=embedVar)
+
+	async def send_newly_dead(self):
+		"""send newly dead embed"""
+		global newly_dead
+		global context
+		if(context is None):
+			print("Error, no context yet")
+			return
 		
-		# prep stats and stuff
-		stats.about()
-		return True
+		num = len(newly_dead)
+		e_title = "{0} pictures have been removed due to violating r/anime's rules".format(num)			# we can have a few of these
+		print(e_title)
+		record(e_title + "\n")
+		embedVar = discord.Embed(title=e_title, color=0x0000ff)
+		if(num > 0):
+			embedVar.set_footer(text='Press \'f\' to pay respects')
 
-#		MESSAGE FUNCTIONS
+		if(num > 0):
+			im = Image.open(newly_dead[0].thumbnail)
+			thumb_x, thumb_y = im.size[0], im.size[1]
+			COLS = 4
 
-# create and send a simple embed
-async def send_embed(title, subtitle, image_url, rgb):
-	global context
-	if(context is None):
-		print("No context yet")
-		return
-	
-	if(rgb is None):
-		e_color = 0x00ff00
-	else:
-		e_color = rgb
-	embedVar = discord.Embed(title=title, color=e_color, description=subtitle)
+			COLS = min(COLS, num)	# if less have died than there are columns, don't need the extras
+			final_x = thumb_x*COLS + 4*(COLS-1)
+			final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
+			im_final = Image.new("RGBA", (final_x, final_y))
+			i = 0
+			for x in newly_dead:
+				im = Image.open(x.thumbnail)
+				im = im.convert('LA')
+				x = (thumb_x+4)*int(i%COLS)
+				y = (thumb_y+4)*int(i/COLS)
+				im_final.paste(im, (x, y))
+				im.close()
+				i += 1
+			im_final.save("final.png")
+			file=discord.File("final.png", filename="final.png")
+			embedVar.set_image(url="attachment://final.png")
+			if(VERBOSE):
+				await context.send(file=file,embed=embedVar)
+		else:
+			if(VERBOSE):
+				await context.send(embed=embedVar)
 
-	if(image_url is not None):
-		#embedVar.set_image(url='https://i.imgur.com/wSTFkRM.png')
-		embedVar.set_image(url=image_url)
-	
-	await context.send(embed=embedVar)
+		newly_dead.clear()
 
-# send newly dead embed
-async def send_newly_dead():
-	global newly_dead
-	global context
-	if(context is None):
-		print("Error, no context yet")
-		return
-	
-	num = len(newly_dead)
-	e_title = "{0} pictures have been removed due to violating r/anime's rules".format(num)			# we can have a few of these
-	print(e_title)
-	record(e_title + "\n")
-	embedVar = discord.Embed(title=e_title, color=0x0000ff)
-	if(num > 0):
-		embedVar.set_footer(text='Press \'f\' to pay respects')
-
-	if(num > 0):
-		im = Image.open(newly_dead[0].thumbnail)
-		thumb_x, thumb_y = im.size[0], im.size[1]
-		COLS = 4
-
-		COLS = min(COLS, num)	# if less have died than there are columns, don't need the extras
-		final_x = thumb_x*COLS + 4*(COLS-1)
-		final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
-		im_final = Image.new("RGBA", (final_x, final_y))
+	async def send_event_image(self, event_champs, msg, color):
+		"""combine and send the thumbnails of every champion involved in an event
+		(horizontal stitch)"""
+		if(self.context is None):
+			print("Error, no context yet")
+			return
+		
+		im = Image.open(event_champs[0].thumbnail)
+		x, y = im.size[0], im.size[1]
+		num = len(event_champs)
+		im_final = Image.new("RGBA", (x*num + 4*(num-1), y))
 		i = 0
-		for x in newly_dead:
-			im = Image.open(x.thumbnail)
-			im = im.convert('LA')
-			x = (thumb_x+4)*int(i%COLS)
-			y = (thumb_y+4)*int(i/COLS)
-			im_final.paste(im, (x, y))
+		for c in event_champs:
+			im = Image.open(c.thumbnail)
+			if(c.status == Status.DEAD):
+				im = im.convert('LA')
+			im_final.paste(im, ((x+4)*i, 0))
 			im.close()
 			i += 1
 		im_final.save("final.png")
+		
+		embedVar = discord.Embed(title=msg[-256:], color=color)
+		if(self.endgame):
+			embedVar.set_footer(text='React to support living champions')
 		file=discord.File("final.png", filename="final.png")
 		embedVar.set_image(url="attachment://final.png")
-		if(VERBOSE):
-			await context.send(file=file,embed=embedVar)
-	else:
-		if(VERBOSE):
-			await context.send(embed=embedVar)
-
-	newly_dead.clear()
-
-# combine and send the thumbnails of every champion involved in an event (horizontal stitch)
-async def send_event_image(event_champs, msg, color):
-	global endgame
-	global context
-	if(context is None):
-		print("Error, no context yet")
-		return
-	
-	im = Image.open(event_champs[0].thumbnail)
-	x, y = im.size[0], im.size[1]
-	num = len(event_champs)
-	im_final = Image.new("RGBA", (x*num + 4*(num-1), y))
-	i = 0
-	for c in event_champs:
-		im = Image.open(c.thumbnail)
-		if(c.status == Status.DEAD):
-			im = im.convert('LA')
-		im_final.paste(im, ((x+4)*i, 0))
-		im.close()
-		i += 1
-	im_final.save("final.png")
-	
-	embedVar = discord.Embed(title=msg[-256:], color=color)
-	if(endgame):
-		embedVar.set_footer(text='React to support living champions')
-	file=discord.File("final.png", filename="final.png")
-	embedVar.set_image(url="attachment://final.png")
-	await context.send(file=file,embed=embedVar)
+		await self.context.send(file=file,embed=embedVar)
 
 
-#		SPONSOR FUNCTIONS
+	# MISC
+def wipe():
+	pass
 
 def process_reaction(message_title, user):
 	global reactions
