@@ -18,10 +18,11 @@ class Games(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.game = None # replace with dict of form {"guild_id": <game>}
+        # TODO: error checking if this is None
 
     # List of hunger games commands
     @commands.command()
-    async def hg_help(self, ctx):
+    async def hg_help(self, ctx): # TODO: update after everything else
         embed=discord.Embed(title="Sailor Mars Commands", description="Use '~' to trigger. Must be a gamemaster to execute")
         embed.set_thumbnail(url="https://imgur.com/KoHvsJM.png")
         embed.add_field(name="~ready", value="Prepares the game and displays the champions", inline=False)
@@ -40,52 +41,54 @@ class Games(commands.Cog):
         if(not await check_channel(ctx) or not await check_gm(ctx)):
             return
 
+        if self.game is None:
+            await ctx.message.add_reaction('❌')
+            return
+
         n = 1
         if(len(args) > 0):
             n = int(args[0])
         async with ctx.typing():
             await self.game.advance_n(n)
 
-    @commands.command() # (UPDATED)
-    async def reset(self, ctx):
-        if(not await check_channel(ctx) or not await check_gm(ctx)):
-            return
-
-        self.game = Game(ctx)
-        await ctx.message.add_reaction('✅')
-
-    @commands.command() # (UPDATED)
+    @commands.command()
     async def ready(self, ctx):
         if(not await check_channel(ctx) or not await check_gm(ctx)):
             return
 
-        if self.game is None:
-            await ctx.message.add_reaction('❌')
+        self.game = Game(ctx)
+        await self.game.prep_game()
+        await ctx.message.add_reaction('✅')
+
+    @commands.command()
+    async def reset(self, ctx):
+        if(not await check_channel(ctx) or not await check_gm(ctx)):
             return
+
+        if self.game is None:
+            self.game = Game(ctx)
 
         async with ctx.typing():
             await self.game.prep_game()
 
         await ctx.message.add_reaction('✅')
 
-    # Check permissions of both channel and author
     @commands.command()
     async def check(self, ctx):
+        """Check permissions of both channel and author"""
         if(await check_channel(ctx)):
-            emoji = '✅'
-            await ctx.message.add_reaction(emoji)
+            await ctx.message.add_reaction('✅')
         if(await check_gm(ctx)):
-            emoji = '☑️'
-            await ctx.message.add_reaction(emoji)
+            await ctx.message.add_reaction('☑️')
 
-    # Save or print the saved hg album link
     @commands.command()
     async def album(self, ctx, *args):
+        """Save or print the saved hg album link"""
         await getset("album", ctx, *args)
 
-    # Upload new cast_in.txt file (UPDATED)
     @commands.command()
     async def cast(self, ctx):
+        """Upload new cast_in.txt file, or check the current one"""
         if(not await check_gm(ctx)):
             return
 
@@ -172,8 +175,8 @@ class Games(commands.Cog):
         if(reaction.message.channel.id in HG_CHANNEL):		# if message is in HG channel
             self.game.process_reaction(reaction.message.embeds[0].title, user)
 
-# check if channel is appropriate Hunger Games channel
 async def check_channel(ctx):
+    """check if channel is appropriate Hunger Games channel"""
     if(ctx.message.channel.id in HG_CHANNEL):
         return True
     else:
@@ -182,8 +185,8 @@ async def check_channel(ctx):
         await ctx.message.add_reaction(emoji)
         return False
 
-# check if user is appropriate hunger games game master
 async def check_gm(ctx):
+    """check if user is appropriate hunger games game master"""
     if(ctx.message.author.id in GM):
         return True
     else:
