@@ -8,8 +8,6 @@ import yaml
 from pathlib import Path
 from discord.ext import commands
 
-from hg_bot import wipe
-
 ERROR_CHANNEL = bot_info.ERROR_CHANNEL
 ME = bot_info.OWNER
 io_dir = Path(os.path.abspath(__file__)).parent / "../../io"
@@ -82,7 +80,7 @@ class Utils(commands.Cog):
         
         # ???????????????????
         print("signing off...")
-        wipe()
+        # wipe()
         await self.bot.logout()
         for task in asyncio.Task.all_tasks():
             task.cancel()

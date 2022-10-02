@@ -10,12 +10,6 @@ from cogs.utils import getset
 HG_CHANNEL = bot_info.HG_CHANNEL
 GM = bot_info.GM
 
-# I'd rather not import all just yet
-# from hg_bot import prep_game
-# from hg_bot import advance_n
-# from hg_bot import send_gallery
-# from hg_bot import check_over
-
 from hg_bot import Game
 
 io_dir = Path(os.path.abspath(__file__)).parent / "../../io"
@@ -134,23 +128,22 @@ class Games(commands.Cog):
             await ctx.message.add_reaction(emoji)
             await ctx.send(f"Errors on {errs} lines\n```{err_str}```")
 
-    # @commands.command()
-    # async def run(self, ctx, *args):
-    #     if(not await check_channel(ctx) or not await check_gm(ctx)):
-    #         return
+    @commands.command()
+    async def run(self, ctx, *args):
+        if(not await check_channel(ctx) or not await check_gm(ctx)):
+            return
 
-    #     # run game to completion n times
-    #     n = 1
-    #     if(len(args) > 0):
-    #         n = int(args[0])
-    #     for x in range(n):
-    #         await prep_game(ctx)
-    #         while(not check_over()):
-    #             await advance_n(100)
-    #         if(1==0):
-    #             print(x)
-    #     print("batch done")
-    #     await ctx.send("batch done, {0}".format(ctx.author.mention))
+        # run game to completion n times
+        n = 1
+        if(len(args) > 0):
+            n = int(args[0])
+        self.game = Game(ctx)
+        for x in range(n):
+            await self.game.prep_game()
+            while(not self.game.check_over()):
+                await self.game.advance_n(100)
+        print("batch done")
+        await ctx.send(f"batch done, {ctx.author.mention}")
 
     @commands.command()
     async def alive(self, ctx):
@@ -158,7 +151,7 @@ class Games(commands.Cog):
             return
 
         async with ctx.typing():
-            await self.game.send_gallery(1)
+            await self.game.send_gallery("alive")
 
     @commands.command()
     async def dead(self, ctx):
@@ -166,7 +159,18 @@ class Games(commands.Cog):
             return
 
         async with ctx.typing():
-            await self.game.send_gallery(2)
+            await self.game.send_gallery("dead")
+
+    @commands.Cog.listener()
+    async def on_reaction_add(self, reaction, user):
+        if(user == self.bot.user):		# if a bot is reacting, ignore
+            return
+
+        if(reaction.message.author.id != self.bot.user.id):	# if message isn't this bots message, ignore
+            return
+        
+        if(reaction.message.channel.id in HG_CHANNEL):		# if message is in HG channel
+            self.game.process_reaction(reaction.message.embeds[0].title, user)
 
 # check if channel is appropriate Hunger Games channel
 async def check_channel(ctx):

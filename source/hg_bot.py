@@ -259,7 +259,6 @@ class Event:
 	def get_count_killed(self):
 		return len(self.killed)
 
-
 # Collection of statistics
 class Stats:
 	elapsed_turns = 0
@@ -267,21 +266,22 @@ class Stats:
 
 	def increment_turn(self):
 		self.elapsed_turns += 1
-	
+
 	def increment_event(self):
 		self.elapsed_events += 1
 
 	def about(self):
-		global params
-		global champions
 		print("Elapsed Turns: " + str(self.elapsed_turns))
 		print("Elapsed Events: " + str(self.elapsed_events))
-		print("Fatal Chance: " + str(params.get_fatal_chance()))
+		
+		# I need to rethink this data collecting
+		# print("Fatal Chance: " + str(params.get_fatal_chance())) # useless metric now
 
-		with open(io_dir / "stats.csv", 'a') as f:
-			line = "{0}, {1}, {2}, {3}\n".format(champions.num, self.elapsed_turns, self.elapsed_events, params.get_fatal_chance())
-			f.write(line)
-	
+		# with open(io_dir / "stats.csv", 'a') as f:
+		# 	line = "{0}, {1}, {2}, {3}\n".format(champions.num, self.elapsed_turns, self.elapsed_events, params.get_fatal_chance())
+		# 	f.write(line)
+		pass
+
 	def clear(self):
 		self.elapsed_events = 0
 		self.elapsed_turns = 0
@@ -300,7 +300,7 @@ class Reactions:
 			self.champions.append(x.name)
 		while(len(self.champions) < 8):
 			self.champions.append(None)
-	
+
 	def add_reaction(self, champ, user):
 		idx = -1
 		
@@ -319,7 +319,7 @@ class Reactions:
 		if(count < self.limit):
 			self.reactions[idx_c][idx_u] = self.reactions[idx_c][idx_u] + 1
 		return sum(self.reactions[idx_c])	# return the total number of support
-	
+
 	def about(self):
 		count = 0
 		print()
@@ -332,9 +332,8 @@ class Reactions:
 		for x in self.totals:
 			print(x, end=' ')
 		print()
-		
-	def get_fatal_chance(self, champ):
-		global params
+
+	def get_fatal_chance(self, champ, base_chance):
 		SPONSOR_WEIGHT = 0.2	# 0.35 chosen by survey
 		print(champ.name)
 
@@ -353,11 +352,11 @@ class Reactions:
 			sponsor = self.totals[c] / self.limit*len(self.users)	# sponsorships given / sponsorships possible (aka users*limit)
 			sponsor = max(0, min(1, sponsor))		# keep sponsor in bounds plz
 		
-		last = params.get_fatal_chance() * (1-sponsor*SPONSOR_WEIGHT)
+		last = base_chance * (1-sponsor*SPONSOR_WEIGHT)
 
 		print(last)
 		return last
-	
+
 	# called at the start of a round, this compiles the reactions into totals that affect the next set of events
 	def update_count(self):
 		self.totals.clear()
@@ -368,9 +367,6 @@ class Reactions:
 				self.reactions[x][y] = 0
 
 	def get_champ_idx(self, champ):
-		global endgame
-		if not endgame:
-			return -1
 		try:
 			idx = self.champions.index(champ.name)
 			return idx
@@ -399,7 +395,6 @@ class Params:
 	def get_fatal_chance(self):
 		return self.fatal_chance
 	
-	# called at the start of new turns
 	def update_fatal_chance(self, chance):
 		self.fatal_chance = chance
 
@@ -439,71 +434,11 @@ class Game:
 		# probably reactions too, will cover later
 		self.champions.reset()
 
+	# PREP FUNCTIONS
 	async def prep_game(self):
 		self.reset()
 		await self.download_images(self.champions.roster)
 		await self.send_gallery("all")
-
-	async def send_gallery(self, mode, *args):
-		if(self.context is None):
-			print("Error, no context yet") # raise exception
-			return
-
-		# no point continuing if we're not even sending the message
-		if(not self.params.VERBOSE):
-			return
-
-		# Defaults
-		e_title = "If you see this, there was an error"
-		champs = []
-		des = ""
-
-		# Grab the appropriate champions
-		if(mode == "all"):
-			e_title = "Welcome to the Hunger Games!"
-			champs = self.champions.roster
-			des = f"{len(champs)} Entries!"
-		elif(mode == "alive"):
-			e_title = "Remaining Champions"
-			champs = self.champions.get_list_alive()
-		elif(mode == "dead"):
-			e_title = "Passed Champions"
-			champs = self.champions.get_list_dead()
-		elif(mode == "other"):
-			e_title = args[0]
-			champs = self.champions.get_list_alive()
-			des = args[1]
-		else:
-			print("Error") # raise exception
-		
-		embedVar = discord.Embed(title=e_title, color=0x00ff00, description=des)
-
-		num = len(champs)
-		# i can probably get clever with this and make it so different sized games have different number of COLS
-		COLS = 6
-		im = Image.open(champs[0].thumbnail)
-		thumb_x, thumb_y = im.size[0], im.size[1]
-
-		COLS = min(COLS, num)	# if less have died than there are columns, don't need the extras
-		final_x = thumb_x*COLS + 4*(COLS-1)
-		final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
-		im_final = Image.new("RGBA", (final_x, final_y))
-		i = 0
-		for x in champs:
-			im = Image.open(x.thumbnail)
-			if(x.status == Status.DEAD):
-				im = im.convert('LA')
-			x = (thumb_x+4)*int(i%COLS)
-			y = (thumb_y+4)*int(i/COLS)
-			im_final.paste(im, (x, y))
-			im.close()
-			i += 1
-		im_final.save("final.png")
-		file=discord.File("final.png", filename="final.png")
-		embedVar.set_image(url="attachment://final.png")
-		
-		#if(VERBOSE): # multilevel verbosity
-		await self.context.send(file=file,embed=embedVar)
 
 	def import_champions(self):
 		imported = 0
@@ -643,6 +578,7 @@ class Game:
 	async def download_images(self, champs_list):
 		print("Downloading images...")
 		async with aiohttp.ClientSession() as session:
+			count = 0
 			for x in champs_list:
 				# to do: get image from imgur or local from computer?
 				print(x.name)
@@ -651,10 +587,10 @@ class Game:
 						return await self.context.send('Could not download file...')
 					data = io.BytesIO(await resp.read())
 					x.set_thumbnail(data)
+					count += 1
+			print(f"Downloaded {count} images")
 
-	def check_over(self):
-		return self.game_over
-
+	# PROGRESS FUNCTIONS
 	async def advance_n(self, n):
 		"""advance by N events, showing turn starts and ends if need be"""
 		if(self.game_over):
@@ -679,8 +615,8 @@ class Game:
 				# print message
 				self.endgame = True
 				print("final 8")
-				record("\nfinal 8")
-				await self.send_gallery(3, "Final {0}".format(len(self.acting_champions)), "From now on, react to events to offer your sponsorship to these champions.")
+				self.record("\nfinal 8")
+				await self.send_gallery("other", "Final {0}".format(len(self.acting_champions)), "From now on, react to events to offer your sponsorship to these champions.")
 				self.reactions.fill_champions(self.acting_champions)
 				return		# prompt for another 'advance n'
 
@@ -717,7 +653,7 @@ class Game:
 			subtitle = self.current_type.subtitle()
 			print(text)
 			left = self.champions.get_count_alive()
-			record("\n" + text + "  " + str(left) + " alive\n")
+			self.record("\n" + text + "  " + str(left) + " alive\n")
 
 			# depends on if I want this after ~ready or ~advance
 			#if(self.current_type is EventType.Bloodbath):
@@ -759,6 +695,48 @@ class Game:
 				self.current_day += 1
 				await self.send_newly_dead()
 
+	async def run_event(self, acting_list, type):
+		"""setup and run a single event featuring 1 or more champions"""
+		self.stats.increment_event()	
+		
+		# Get fatal chance of this event
+		num_alive = self.champions.get_count_alive()
+		
+		base_chance = self.params.get_fatal_chance()
+		if(self.params.SPONSORSHIP and num_alive <= 8): # TODO: parameterize this
+			chance = self.reactions.get_fatal_chance(acting_list[-1], base_chance)
+		else:
+			chance = base_chance
+		fatal = random.random() < chance
+
+		# Actors in event must not exceed #champs left
+		champions_remaining = len(acting_list)
+		if(num_alive <= 1):
+			fatal = False
+
+		# Diers in event must not equal #champs left
+		kill_limit = champions_remaining
+		if(num_alive == champions_remaining):
+			kill_limit -= 1
+
+		# select an event from the appropriate list
+		this_event = self.events.get_random_event(champions_remaining, type, fatal, kill_limit)
+
+		# pull champions
+		event_champs = []
+		for x in range(0, this_event.numChampions):
+			event_champs.append(acting_list.pop())
+
+		# mark 'killed' as dead (has to happen before display for ease)
+		for x in this_event.killed:
+			dead = event_champs[int(x[6:])-1] # get N from "PlayerN"
+			dead.set_status_dead()
+			self.newly_dead.append(dead)
+
+		# display event
+		await self.print_event(this_event, event_champs)
+
+	# STATUS FUNCTIONS
 	def get_fatal_chance(self):
 		# always calculating the chance based on those alive is handy
 		x = self.champions.get_count_alive()
@@ -790,77 +768,37 @@ class Game:
 		print(fatal_chance)
 		return fatal_chance
 
-	async def run_event(self, acting_list, type):
-		"""setup and run a single event featuring 1 or more champions"""
-		self.stats.increment_event()	
-		
-		# Get fatal chance of this event
-		num_alive = self.champions.get_count_alive()
-		
-		if(self.params.SPONSORSHIP and num_alive <= 8):
-			chance = self.reactions.get_fatal_chance(acting_list[-1])
-		else:
-			chance = self.params.get_fatal_chance()
-		fatal = random.random() < chance
-
-		champions_remaining = len(acting_list)	# event must not exceed # of champions left
-		if(num_alive <= 1):
-			fatal = False
-
-		# don't kill everyone if these are the only champions left
-		kill_limit = champions_remaining
-		if(num_alive == champions_remaining):
-			kill_limit -= 1
-
-		# select an event from the appropriate list
-		this_event = self.events.get_random_event(champions_remaining, type, fatal, kill_limit)
-
-		# pull champions
-		event_champs = []
-		for x in range(0, this_event.numChampions):
-			event_champs.append(acting_list.pop())
-
-		# mark 'killed' as dead (has to happen before display for ease)
-		for x in this_event.killed:
-			dead = event_champs[int(x[6:])-1] # get N from "PlayerN"
-			dead.set_status_dead()
-			self.newly_dead.append(dead)
-
-		# display event
-		await self.print_event(this_event, event_champs)
-
 	async def check_for_winner(self):
 		"""Check if one champion is left, and announce if so"""
-		global champions
-		global game_over
-		global context
-
-		alive = champions.get_list_alive()
+		alive = self.champions.get_list_alive()
 		if(len(alive) > 1):
 			return False
 		else:
-			game_over = True
+			self.game_over = True
 			if(len(alive) < 1):
 				print("Error, no one survived")
-				await context.send("No winners, {0}".format(context.author.mention))
+				await self.context.send("No winners, {0}".format(self.context.author.mention))
 				return True
 			winner = alive[0]
 			text = "The winner is: " + winner.name
 			print(text)
 			
-			line = str(params.get_fatal_chance()) + "    " + text + "\n"
-			record(line)
+			line = str(self.params.get_fatal_chance()) + "    " + text + "\n"
+			self.record(line)
 			
 			link = winner.image_link
-			link = link[:-5] + link[-4:]
+			link = link[:-5] + link[-4:] # chop out the 'b' modifier to get full image
 			print(link)
-			await send_embed(text, "", link, 0x0000ff)		# image is compressed as shit but it's fine
-			if(os.path.exists("final.png")):
+			await self.send_embed(text, "", link, 0x0000ff)		# image is compressed as shit but it's fine
+			if(os.path.exists("final.png")): # move to cleanup function?
 				os.remove("final.png")
 			
 			# prep stats and stuff
-			stats.about()
+			self.stats.about()
 			return True
+	
+	def check_over(self):
+		return self.game_over
 
 	# MESSAGE FUNCTIONS
 	async def print_event(self, event: Event, event_champs):
@@ -869,12 +807,15 @@ class Game:
 		color = 0x00ff00
 		if(len(event.killed) > 0):
 			color = 0xff0000
-		
-		line = "{:.3f}".format(self.params.get_fatal_chance())
+
+		# this seems like a lot of repeat code
+		base_chance = self.params.get_fatal_chance()
+		line = f"{base_chance:.3f}"
 		if(self.params.SPONSORSHIP and self.endgame):
-			line = line + " ({:.3f}) ".format(self.reactions.get_fatal_chance(event_champs[0]))
+			adjusted_chance = self.reactions.get_fatal_chance(event_champs[0], base_chance)
+			line = line + f" ({adjusted_chance:.3f}) "
 		line = line + "    " + msg
-		record(line)
+		self.record(line)
 
 		if(self.params.VERBOSE):
 			await self.send_event_image(event_champs, msg, color)
@@ -899,22 +840,20 @@ class Game:
 
 	async def send_newly_dead(self):
 		"""send newly dead embed"""
-		global newly_dead
-		global context
-		if(context is None):
+		if(self.context is None):
 			print("Error, no context yet")
 			return
 		
-		num = len(newly_dead)
-		e_title = "{0} pictures have been removed due to violating r/anime's rules".format(num)			# we can have a few of these
+		num = len(self.newly_dead)
+		e_title = f"{num} pictures have been removed due to violating r/anime's rules"			# TODO: we can have a few of these
 		print(e_title)
-		record(e_title + "\n")
+		self.record(e_title + "\n")
 		embedVar = discord.Embed(title=e_title, color=0x0000ff)
 		if(num > 0):
 			embedVar.set_footer(text='Press \'f\' to pay respects')
 
 		if(num > 0):
-			im = Image.open(newly_dead[0].thumbnail)
+			im = Image.open(self.newly_dead[0].thumbnail)
 			thumb_x, thumb_y = im.size[0], im.size[1]
 			COLS = 4
 
@@ -923,7 +862,7 @@ class Game:
 			final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
 			im_final = Image.new("RGBA", (final_x, final_y))
 			i = 0
-			for x in newly_dead:
+			for x in self.newly_dead:
 				im = Image.open(x.thumbnail)
 				im = im.convert('LA')
 				x = (thumb_x+4)*int(i%COLS)
@@ -934,13 +873,13 @@ class Game:
 			im_final.save("final.png")
 			file=discord.File("final.png", filename="final.png")
 			embedVar.set_image(url="attachment://final.png")
-			if(VERBOSE):
-				await context.send(file=file,embed=embedVar)
+			if(self.params.VERBOSE):
+				await self.context.send(file=file,embed=embedVar)
 		else:
-			if(VERBOSE):
-				await context.send(embed=embedVar)
+			if(self.params.VERBOSE):
+				await self.context.send(embed=embedVar)
 
-		newly_dead.clear()
+		self.newly_dead.clear()
 
 	async def send_event_image(self, event_champs, msg, color):
 		"""combine and send the thumbnails of every champion involved in an event
@@ -970,44 +909,94 @@ class Game:
 		embedVar.set_image(url="attachment://final.png")
 		await self.context.send(file=file,embed=embedVar)
 
+	async def send_gallery(self, mode, *args):
+		if(self.context is None):
+			print("Error, no context yet") # raise exception
+			return
 
-	# MISC
-def wipe():
-	pass
+		# no point continuing if we're not even sending the message
+		if(not self.params.VERBOSE):
+			return
 
-def process_reaction(message_title, user):
-	global reactions
-	global champions
-	global SPONSORSHIP
-	global endgame
+		# Defaults
+		e_title = "If you see this, there was an error"
+		champs = []
+		des = ""
 
-	if(not SPONSORSHIP):		# not sponsoring, move on
-		return -1
-	if(not endgame):			# if not in final 8, move on
-		return -1
+		# Grab the appropriate champions
+		if(mode == "all"):
+			e_title = "Welcome to the Hunger Games!"
+			champs = self.champions.roster
+			des = f"{len(champs)} Entries!"
+		elif(mode == "alive"):
+			e_title = "Remaining Champions"
+			champs = self.champions.get_list_alive()
+		elif(mode == "dead"):
+			e_title = "Passed Champions"
+			champs = self.champions.get_list_dead()
+		elif(mode == "other"):
+			e_title = args[0]
+			champs = self.champions.get_list_alive()
+			des = args[1]
+		else:
+			print("Error") # raise exception
+		
+		embedVar = discord.Embed(title=e_title, color=0x00ff00, description=des)
 
-	msg = message_title
-	out = 0
-	alive = champions.get_list_alive()
-	print("react!")
+		num = len(champs)
+		# i can probably get clever with this and make it so different sized games have different number of COLS
+		COLS = 6
+		im = Image.open(champs[0].thumbnail) # TODO: breaks if list len == 0
+		thumb_x, thumb_y = im.size[0], im.size[1]
 
-	names = re.search(r"\"[^\"]*\"", msg)	# v1: 	"\"\w*\""		v2: "\".*\""
-	while(names):
-		x = names[0]
-		print(x)
-		for y in alive:
-			n = x.strip("\"")
-			if y.name == n:
-				out = reactions.add_reaction(y, user)
-				break
-		msg = msg.replace(x, " ")
-		names = re.search(r"\"[^\"]*\"", msg)
-	reactions.about()
-	return out		# return amount of support on msg
+		COLS = min(COLS, num)	# if less have died than there are columns, don't need the extras
+		final_x = thumb_x*COLS + 4*(COLS-1)
+		final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
+		im_final = Image.new("RGBA", (final_x, final_y))
+		i = 0
+		for x in champs:
+			im = Image.open(x.thumbnail)
+			if(x.status == Status.DEAD):
+				im = im.convert('LA')
+			x = (thumb_x+4)*int(i%COLS)
+			y = (thumb_y+4)*int(i/COLS)
+			im_final.paste(im, (x, y))
+			im.close()
+			i += 1
+		im_final.save("final.png")
+		file=discord.File("final.png", filename="final.png")
+		embedVar.set_image(url="attachment://final.png")
+		
+		#if(VERBOSE): # multilevel verbosity
+		await self.context.send(file=file,embed=embedVar)
 
-#		OTHER
+	def record(self, line):
+		"""append line to current game record"""
+		with open(io_dir / "record.txt", 'a') as f:
+			f.write(line)
 
-# append line to current game record
-def record(line):
-	with open(io_dir / "record.txt", 'a') as f:
-		f.write(line)
+	# REACTIONS
+	def process_reaction(self, message_title, user):
+		if(not self.params.SPONSORSHIP):		# not sponsoring, move on
+			return -1
+		if(not self.endgame):			# if not in final 8, move on
+			return -1
+
+		msg = message_title
+		out = 0
+		alive = self.champions.get_list_alive()
+		print("react!")
+
+		names = re.search(r"\"[^\"]*\"", msg)	# v1: 	"\"\w*\""		v2: "\".*\""
+		while(names):
+			x = names[0]
+			print(x)
+			for y in alive:
+				n = x.strip("\"")
+				if y.name == n:
+					out = self.reactions.add_reaction(y, user)
+					break
+			msg = msg.replace(x, " ")
+			names = re.search(r"\"[^\"]*\"", msg)
+		self.reactions.about()
+		return out		# return amount of support on msg
