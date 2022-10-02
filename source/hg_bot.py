@@ -13,6 +13,8 @@ import configparser
 from PIL import Image
 from pathlib import Path
 
+io_dir = Path(os.path.abspath(__file__)).parent / "../io"
+
 #		ENUMS
 
 class Gender(IntEnum):
@@ -71,20 +73,27 @@ class EventType(IntEnum):
 
 # List of all participating champions
 class Champions:
+	"""I kind of want this to just be a list of the champions
+	and any functions that go along with managing that list.
+	External factors like where the champs are loaded from and how
+	can remain with the Game object"""
 	roster = []
-	num = 0		# oh yeah this exists
 	
+	def __len__(self):
+		return len(self.roster)
+
+	def reset(self):
+		for champ in self.roster:
+			champ.set_status(Status.ALIVE)
+
 	def clear_roster(self):
 		self.roster.clear()
-		self.num = 0
 	
 	def add_champion(self, new_champ):
 		self.roster.append(new_champ)
-		self.num += 1
 	
 	def clear(self):
 		self.roster.clear()
-		self.num = 0
 	
 	def about(self):
 		print("\nNumber of champions: " + str(self.num))
@@ -143,6 +152,7 @@ class Events:
 	# events_structure[Is_Fatal][EventType][events] is list of events matching appropriate Is_Fatal and EventType
 
 	def about(self):
+		# this is a bad name for this function
 		print("\nHarmless")
 		for t in EventType:
 			print('# of ' + t.name + ' Events: ' + str(len(self.events_structure[0][t])))
@@ -389,7 +399,21 @@ class Reactions:
 
 # Collection of settings, parameters, etc
 class Params:
-	fatal_chance = 0.3
+	def __init__(self):
+		self.fatal_chance = 0.3
+		self.FeastDay = 3			# day of the feast event, and start of the rise in death rate
+		self.SPONSORSHIP = True		# is sponsorship turned on?
+		self.VERBOSE = True			# if true, send messages to discord. If false, just print to logs
+		self.EVENTS_IN = ""			# input file for events
+		self.load_ini()
+
+	def load_ini(self):
+		config = configparser.ConfigParser()
+		config.read(io_dir / 'HG.ini')
+		self.FeastDay = int(config['Settings']['FeastDay'])
+		self.SPONSORSHIP = config['Settings'].getboolean('SPONSORSHIP')
+		self.VERBOSE = config['Settings'].getboolean('VERBOSE')
+		self.EVENTS_IN = config['Settings']['EVENTS_IN']
 
 	def get_fatal_chance(self):
 		return self.fatal_chance
@@ -430,6 +454,258 @@ class Params:
 
 		print(self.fatal_chance)
 
+# An instance of a single game
+class Game:
+	def __init__(self, context):
+		self.context = context
+
+		self.imported = False # likely able to remove
+
+		self.champions = Champions()
+		self.events = Events()
+		self.stats = Stats()
+		self.reactions = Reactions()
+		self.params = Params()
+
+		self.params.load_ini()
+		print("setting up new game")
+		self.import_champions()
+		self.import_events()
+
+	def reset(self):
+		"""
+		Set settings to default
+		Do not delete existing events or champions or settings
+		"""
+		print("resetting")
+		self.game_over = False
+		self.endgame = False
+		self.current_day = 0
+		self.current_event = 0
+		self.current_event_type = EventType.Bloodbath
+		self.newly_dead = []
+		self.acting_champions = []
+
+		self.stats.clear()
+		# probably reactions too, will cover later
+		self.champions.reset()
+
+	async def prep_game(self):
+		self.reset()
+		await self.download_images(champions.roster)
+		await self.send_gallery("all")
+
+	async def send_gallery(self, mode, *args):
+		if(self.context is None):
+			print("Error, no context yet") # raise exception
+			return
+
+		# no point continuing if we're not even sending the message
+		if(not self.params.VERBOSE):
+			return
+
+		# Defaults
+		e_title = "If you see this, there was an error"
+		champs = []
+		des = ""
+
+		# Grab the appropriate champions
+		if(mode == "all"):
+			e_title = "Welcome to the Hunger Games!"
+			champs = champions.roster
+			des = f"{len(champs)} Entries!"
+		elif(mode == "alive"):
+			e_title = "Remaining Champions"
+			champs = champions.get_list_alive()
+		elif(mode == "dead"):
+			e_title = "Passed Champions"
+			champs = champions.get_list_dead()
+		elif(mode == "other"):
+			e_title = args[0]
+			champs = champions.get_list_alive()
+			des = args[1]
+		else:
+			print("Error") # raise exception
+		
+		embedVar = discord.Embed(title=e_title, color=0x00ff00, description=des)
+
+		num = len(champs)
+		# i can probably get clever with this and make it so different sized games have different number of COLS
+		COLS = 6
+		im = Image.open(champs[0].thumbnail)
+		thumb_x, thumb_y = im.size[0], im.size[1]
+
+		COLS = min(COLS, num)	# if less have died than there are columns, don't need the extras
+		final_x = thumb_x*COLS + 4*(COLS-1)
+		final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
+		im_final = Image.new("RGBA", (final_x, final_y))
+		i = 0
+		for x in champs:
+			im = Image.open(x.thumbnail)
+			if(x.status == Status.DEAD):
+				im = im.convert('LA')
+			x = (thumb_x+4)*int(i%COLS)
+			y = (thumb_y+4)*int(i/COLS)
+			im_final.paste(im, (x, y))
+			im.close()
+			i += 1
+		im_final.save("final.png")
+		file=discord.File("final.png", filename="final.png")
+		embedVar.set_image(url="attachment://final.png")
+		
+		#if(VERBOSE): # multilevel verbosity
+		await self.context.send(file=file,embed=embedVar)
+
+	def import_champions(self):
+		imported = 0
+
+		f = open(io_dir / "cast_in.txt", "r")
+		
+		print("Importing champions...")
+		line = f.readline()	# eat first line
+		line = f.readline() # get #entries value				# TODO Throw error if this seems wrong
+		entries = int(line[:-1])
+		line = f.readline()
+		#print(line)
+		while(len(line) > 1):
+			print(line, end="")
+			# ignore lines that start with "~". For dev sanity
+			if(line.startswith('~')):
+				line = f.readline()
+				continue
+
+			# Parse line
+			x = self.check_champion_line(line.strip())
+			if x is None:
+				print(f"Skipping erroneous line: \"{line.strip()}\"")
+				line = f.readline()
+				continue
+
+			# Add new champ
+			new_champ = Champion(x["name"], x["link"], Gender(x["gender"]), Status(0))
+			self.champions.add_champion(new_champ)
+			imported += 1
+
+			# prep next iteration
+			if(imported >= entries):
+				break
+			line = f.readline()
+
+		f.close()
+
+	def check_champion_line(self, line: str):
+		"""Parse and error check a single line in a champion file"""
+
+		x = line.split("\t")
+		while("" in x): 
+			x.remove("")
+		
+		if len(x) != 3:
+			return None
+
+		# if the .png is there, remove it. Later operations require it to not be there
+		link = x[1]
+		if(x[1][-4:] == ".png"):
+			link = link[:-4]
+		
+		try:
+			g = int(x[2])
+		except ValueError:
+			return None
+
+		return {
+			"name": x[0].strip(),
+			"link": x[1],
+			"gender": g
+		}
+
+	def check_list_of_champions(self, filename: str = "cast_in.txt"):
+		f = open(io_dir / filename, "r")
+		error_count = 0
+		error_str = ""
+
+		# Ignore first line
+		try:
+			line = f.readline()
+		except UnicodeDecodeError:
+			return -1, "Unicode error in input file"
+
+		# Check num line
+		line = f.readline()
+		try:
+			int(line)
+		except ValueError:
+			error_count += 1
+			str = f"Error: second line should contain number of entries. Instead: \"{line.strip()}\""
+			print(str)
+			error_str += ("\n" + str)
+
+		# Check champion lines
+		line = f.readline()
+		while(len(line) > 1):
+			# comment lines are fine
+			if(line.startswith('~')):
+				line = f.readline()
+				continue
+			
+			x = self.check_champion_line(line.strip())
+			if x is None:
+				error_count += 1
+				str = f"Error: champion line format incorrect. Line: \"{line.strip()}\""
+				print(str)
+				error_str += (f"\n\"{line.strip()}\"")
+			
+			line = f.readline()
+
+		# return result
+		print(f"Errors on {-1*error_count} lines")
+		return -1*error_count, error_str
+
+	def import_events(self):
+		# I dont want to totally kill this structure
+		# But I cant explain why
+		if "json" in self.params.EVENTS_IN:
+			self.import_json_of_events()
+		else:
+			pass
+		self.events.about()
+
+	def import_json_of_events(self):
+		imported = 0
+		events_in = {}
+		print("Importing events from .json...")
+		with open(io_dir / "events.json", "r") as f:
+			events_in = json.load(f)
+
+		for type_str in events_in.keys():		# Day, night, etc
+			for result in events_in[type_str].keys():		# fatal, nonfatal
+				for numChampions in events_in[type_str][result]:	# 1, 2, 3 etc
+					for e in events_in[type_str][result][numChampions]:
+						# get proper EventType from string
+						type = EventType.Day
+						for t in EventType:
+							if(type_str in t.name):
+								type = t
+								break
+						self.events.add_event(Event(type, int(numChampions), e["Killers"], e["Killed"], e["Text"]))
+						imported += 1
+		print(f"Imported {imported} events")
+
+	async def download_images(self, champs_list):
+		print("Downloading images...")
+		async with aiohttp.ClientSession() as session:
+			for x in champs_list:
+				# to do: get image from imgur or local from computer?
+				print(x.name)
+				async with session.get(x.image_link) as resp:
+					if resp.status != 200:
+						return await self.context.send('Could not download file...')
+					data = io.BytesIO(await resp.read())
+					x.set_thumbnail(data)
+
+	def check_over(self):
+		return self.game_over
+
 
 
 #		GLOBALS
@@ -448,7 +724,7 @@ current_event = 0
 imported = False
 current_type = EventType.Bloodbath
 context = None
-io_dir = Path(os.path.abspath(__file__)).parent / "../io"
+
 
 # Lists
 newly_dead = []
@@ -460,250 +736,6 @@ SPONSORSHIP = True		# is sponsorship turned on?
 VERBOSE = True			# if true, send messages to discord. If false, just print to logs
 EVENTS_IN = ""			# input file for events
 
-#		PREP FUNCTIONS
-
-# import and other start of game setup
-async def prep_game(ctx):
-	global context
-	global newly_dead
-	global current_day
-	global current_event
-	global game_over
-	global stats
-	global imported
-	global endgame
-
-	# champions and events should be filled at this point
-	# setup variables that need it
-	newly_dead.clear()
-	current_day = 0
-	current_event = 0
-	game_over = False
-	endgame = False
-	stats.clear()
-	load_ini()
-
-	context = ctx
-	if(not imported):
-		await import_all()
-		imported = True
-	else:
-		print("resetting current cast")
-		for x in champions.roster:
-			x.set_status(Status.ALIVE)
-
-	# depends on if I want this after ~ready or ~advance
-	await send_gallery(0)
-
-# perform all import / download functions
-async def import_all():
-	global champions
-	global events
-	global EVENTS_IN
-
-	champions = Champions()
-	events = Events()
-
-	if "json" in EVENTS_IN:		# Idk why I have this, just feels right until I delete the .txt stuff
-		import_json_of_events()
-	else:
-		import_list_of_events()
-	events.about()
-	import_list_of_champions()
-	await download_images(champions.roster)	# TODO: Skip when not VERBOSE
-	print("done")
-
-# get list of champions from file
-def import_list_of_champions():
-	global champions
-	imported = 0
-
-	f = open(io_dir / "cast_in.txt", "r")
-	
-	print("Importing champions...")
-	line = f.readline()	# eat first line
-	line = f.readline() # get #entries value				# TODO Throw error if this seems wrong
-	entries = int(line[:-1])
-	line = f.readline()
-	#print(line)
-	while(len(line) > 1):
-		print(line)
-		# ignore lines that start with "~". For dev sanity
-		if(line.startswith('~')):
-			line = f.readline()
-			continue
-		
-		#work
-		x = check_champion_line(line.strip())
-		if x is None:
-			print(f"Skipping erroneous line: \"{line.strip()}\"")
-			line = f.readline()
-			continue
-
-		new_champ = Champion(x["name"], x["link"], Gender(x["gender"]), Status(0))
-		champions.add_champion(new_champ)
-		imported += 1
-		
-		# prep next iteration
-		if(imported >= entries):
-			break
-		line = f.readline()
-	
-	f.close()
-
-# analyze and determine if cast_in.txt is error free
-def check_list_of_champions(filename: str = "cast_in.txt"):
-	f = open(io_dir / filename, "r")
-	error_count = 0
-	error_str = ""
-
-	# Ignore first line
-	try:
-		line = f.readline()
-	except UnicodeDecodeError:
-		return -1, "Unicode error in input file"
-
-	# Check num line
-	line = f.readline()
-	try:
-		int(line)
-	except ValueError:
-		error_count += 1
-		str = f"Error: second line should contain number of entries. Instead: \"{line.strip()}\""
-		print(str)
-		error_str += ("\n" + str)
-
-	# Check champion lines
-	line = f.readline()
-	while(len(line) > 1):
-		# comment lines are fine
-		if(line.startswith('~')):
-			line = f.readline()
-			continue
-		
-		x = check_champion_line(line.strip())
-		if x is None:
-			error_count += 1
-			str = f"Error: champion line format incorrect. Line: \"{line.strip()}\""
-			print(str)
-			error_str += (f"\n\"{line.strip()}\"")
-		
-		line = f.readline()
-
-	# return result
-	print(f"Errors on {-1*error_count} lines")
-	return -1*error_count, error_str
-
-# parse and eror check single champion line
-def check_champion_line(line: str):
-	x = line.split("\t")
-	while("" in x): 
-		x.remove("")
-	
-	if len(x) != 3:
-		return None
-
-	# if the .png is there, remove it. Later operations require it to not be there
-	link = x[1]
-	if(x[1][-4:] == ".png"):
-		link = link[:-4]
-	
-	try:
-		g = int(x[2])
-	except ValueError:
-		return None
-
-	return {
-		"name": x[0].strip(),
-		"link": x[1],
-		"gender": g
-	}
-
-# get list of events from json file
-def import_json_of_events():
-	global events
-	imported = 0
-	events_in = {}
-	print("Importing events from .json...")
-	with open(io_dir / "events.json", "r") as f:
-		events_in = json.load(f)
-	
-	for type_str in events_in.keys():		# Day, night, etc
-		for result in events_in[type_str].keys():		# fatal, nonfatal
-			for numChampions in events_in[type_str][result]:	# 1, 2, 3 etc
-				for e in events_in[type_str][result][numChampions]:
-					# get proper EventType from string
-					type = EventType.Day
-					for t in EventType:
-						if(type_str in t.name):
-							type = t
-							break
-					events.add_event(Event(type, int(numChampions), e["Killers"], e["Killed"], e["Text"]))
-					imported += 1
-	print(f"Imported {imported} events")
-
-# get and sort events from txt file (OLD)
-def import_list_of_events():
-	import_limit = 1000
-	imported = 0
-
-	f = open(io_dir / "events_in.txt", "r", encoding="utf8")
-	
-	print("Importing events from .txt...")
-	line = f.readline() # eat first line
-	line = f.readline()
-	while(len(line) > 1):
-		#print(line)
-		# ignore lines that start with "~". For dev sanity
-		if(line.startswith('~')):
-			line = f.readline()
-			continue
-			
-		x = line.split("\t")
-		while("" in x): 
-			x.remove("")
-		
-		# TODO: add events with multiple types to multiple lists
-		type = EventType.Day
-		for t in EventType:
-			if(x[0] in t.name):
-				type = t
-				break
-		numChampions = int(x[1])
-		if(x[2] == "na" or x[2] == "None"):
-			killers = []
-		else:
-			killers = x[2].split(", ")
-		if(x[3] == "na" or x[3] == "None"):
-			killed = []
-		else:
-			killed = x[3].split(", ")
-		text = x[4].strip()
-
-		events.add_event(Event(type, numChampions, killers, killed, text))
-
-		line = f.readline()
-		imported += 1
-		if(imported >= import_limit):
-			break
-	f.close()
-
-# download thumbnails for each champion and store them for future use
-async def download_images(champs_list):
-	global context
-	print("Downloading images...")
-	async with aiohttp.ClientSession() as session:
-		for x in champs_list:
-			# to do: get image from imgur or local from computer?
-			print(x.name)
-			async with session.get(x.image_link) as resp:
-				if resp.status != 200:
-					return await context.send('Could not download file...')
-				data = io.BytesIO(await resp.read())
-				x.set_thumbnail(data)
-				
-	#for x in champs_list:
-	#	await context.send(file=discord.File(x.thumbnail, x.name + '.png'))
 
 #		PROGRESS FUNCTIONS
 
@@ -996,74 +1028,6 @@ async def send_event_image(event_champs, msg, color):
 	embedVar.set_image(url="attachment://final.png")
 	await context.send(file=file,embed=embedVar)
 
-	#await send_embed(msg, None, None, color)
-	#await context.send(file=discord.File("final.png", x.name + '.png'))
-
-# generate and send an image of participating champions (2d stitch)
-async def send_gallery(mode, *args):
-	# modes: 
-	# 0: send all
-	# 1: send alive
-	# 2: send dead
-	
-	global context
-	if(context is None):
-		print("Error, no context yet")
-		return
-
-	# no point continuing if we're not even sending the message
-	if(not VERBOSE):
-		return
-
-	e_title = "If you see this, there was an error"
-	champs = []
-	des = ""
-
-	if(mode == 0):
-		e_title = "Welcome to the Hunger Games!"
-		champs = champions.roster
-		des = f"{len(champs)} Entries!"
-	elif(mode == 1):
-		e_title = "Remaining Champions"
-		champs = champions.get_list_alive()
-	elif(mode == 2):
-		e_title = "Passed Champions"
-		champs = champions.get_list_dead()
-	elif(mode == 3):
-		e_title = args[0]
-		champs = champions.get_list_alive()
-		des = args[1]
-	else:
-		print("Error")
-	
-	embedVar = discord.Embed(title=e_title, color=0x00ff00, description=des)
-
-	num = len(champs)
-	# i can probably get clever with this and make it so different sized games have different number of COLS
-	COLS = 6
-	im = Image.open(champs[0].thumbnail)
-	thumb_x, thumb_y = im.size[0], im.size[1]
-
-	COLS = min(COLS, num)	# if less have died than there are columns, don't need the extras
-	final_x = thumb_x*COLS + 4*(COLS-1)
-	final_y = (thumb_y+4)*(int(((num-1) / COLS))+1)
-	im_final = Image.new("RGBA", (final_x, final_y))
-	i = 0
-	for x in champs:
-		im = Image.open(x.thumbnail)
-		if(x.status == Status.DEAD):
-			im = im.convert('LA')
-		x = (thumb_x+4)*int(i%COLS)
-		y = (thumb_y+4)*int(i/COLS)
-		im_final.paste(im, (x, y))
-		im.close()
-		i += 1
-	im_final.save("final.png")
-	file=discord.File("final.png", filename="final.png")
-	embedVar.set_image(url="attachment://final.png")
-	
-	#if(VERBOSE):
-	await context.send(file=file,embed=embedVar)
 
 #		SPONSOR FUNCTIONS
 
@@ -1099,43 +1063,7 @@ def process_reaction(message_title, user):
 
 #		OTHER
 
-# clear globals
-def wipe():
-	# .clear() or None?
-	global champions
-	global events
-	global newly_dead
-	global acting_champions
-	global imported
-
-	champions.clear_roster()
-	events.clear()
-
-	newly_dead.clear()
-	acting_champions.clear()
-	load_ini()
-	imported = False
-
-# return game_over
-def check_over():
-	global game_over
-	return game_over
-
 # append line to current game record
 def record(line):
 	with open(io_dir / "record.txt", 'a') as f:
 		f.write(line)
-
-# read settings from .ini file
-def load_ini():
-	global FeastDay
-	global SPONSORSHIP
-	global VERBOSE
-	global EVENTS_IN
-
-	config = configparser.ConfigParser()
-	config.read(io_dir / 'HG.ini')
-	FeastDay = int(config['Settings']['FeastDay'])
-	SPONSORSHIP = config['Settings'].getboolean('SPONSORSHIP')
-	VERBOSE = config['Settings'].getboolean('VERBOSE')
-	EVENTS_IN = config['Settings']['EVENTS_IN']

@@ -13,16 +13,17 @@ GM = bot_info.GM
 # I'd rather not import all just yet
 from hg_bot import prep_game
 from hg_bot import advance_n
-from hg_bot import wipe
 from hg_bot import send_gallery
 from hg_bot import check_over
-from hg_bot import check_list_of_champions
+
+from hg_bot import Game
 
 io_dir = Path(os.path.abspath(__file__)).parent / "../../io"
 
 class Games(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.game = None # replace with dict of form {"guild_id": <game>}
 
     # List of hunger games commands
     @commands.command()
@@ -42,24 +43,36 @@ class Games(commands.Cog):
 
     @commands.command()
     async def advance(self, ctx, *args):
-        global context
         if(not await check_channel(ctx) or not await check_gm(ctx)):
             return
 
-        context = ctx
         n = 1
         if(len(args) > 0):
             n = int(args[0])
         async with ctx.typing():
             await advance_n(n)
 
-    @commands.command()
+    @commands.command() # (UPDATED)
     async def reset(self, ctx):
         if(not await check_channel(ctx) or not await check_gm(ctx)):
             return
-        wipe()
-        emoji = '✅'
-        await ctx.message.add_reaction(emoji)
+
+        self.game = Game(ctx)
+        await ctx.message.add_reaction('✅')
+
+    @commands.command() # (UPDATED)
+    async def ready(self, ctx):
+        if(not await check_channel(ctx) or not await check_gm(ctx)):
+            return
+
+        if self.game is None:
+            await ctx.message.add_reaction('❌')
+            return
+
+        async with ctx.typing():
+            await self.game.prep_game()
+
+        await ctx.message.add_reaction('✅')
 
     # Check permissions of both channel and author
     @commands.command()
@@ -76,10 +89,13 @@ class Games(commands.Cog):
     async def album(self, ctx, *args):
         await getset("album", ctx, *args)
 
-    # Upload new cast_in.txt file
+    # Upload new cast_in.txt file (UPDATED)
     @commands.command()
     async def cast(self, ctx):
         if(not await check_gm(ctx)):
+            return
+
+        if self.game is None:
             return
 
         if(len(ctx.message.attachments) > 0):
@@ -92,12 +108,12 @@ class Games(commands.Cog):
                 await ctx.message.add_reaction(emoji)
                 await ctx.send("File upload error")
                 return
-            errs, err_str = check_list_of_champions("cast.txt")
+            errs, err_str = self.game.check_list_of_champions("cast.txt")
         else:
             # check current file
             attach = False
             print("checking current file")
-            errs, err_str = check_list_of_champions()
+            errs, err_str = self.game.check_list_of_champions()
 
         if errs == 0:
             if attach:
@@ -151,19 +167,6 @@ class Games(commands.Cog):
 
         async with ctx.typing():
             await send_gallery(2)
-
-    @commands.command()
-    async def ready(self, ctx):
-        global context
-        if(not await check_channel(ctx) or not await check_gm(ctx)):
-            return
-
-        context = ctx
-        async with ctx.typing():
-            await prep_game(ctx)
-
-        emoji = '✅'
-        await ctx.message.add_reaction(emoji)
 
 # check if channel is appropriate Hunger Games channel
 async def check_channel(ctx):
