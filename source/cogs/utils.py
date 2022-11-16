@@ -8,8 +8,6 @@ import yaml
 from pathlib import Path
 from discord.ext import commands
 
-from hg_bot import wipe
-
 ERROR_CHANNEL = bot_info.ERROR_CHANNEL
 ME = bot_info.OWNER
 io_dir = Path(os.path.abspath(__file__)).parent / "../../io"
@@ -51,10 +49,10 @@ class Utils(commands.Cog):
         embed=discord.Embed(title="Sailor Mars Commands", description="Use '~' to trigger.")
         embed.set_thumbnail(url="https://imgur.com/KoHvsJM.png")
         embed.add_field(name="~gw", value="Displays the current group watch schedule", inline=False)
-        embed.add_field(name="~gw < link >", value="Updates the current group watch schedule", inline=False)
-        embed.add_field(name="~gw2", value="Displays the group watch schedule with time sensitive highlights", inline=False)
+        embed.add_field(name="~gw <link>", value="Updates the current group watch schedule", inline=False)
         embed.add_field(name="~count", value="Plays a 5 second countdown in voice", inline=False)
         embed.add_field(name="~source", value="Prints github source", inline=False)
+        embed.add_field(name="~hg_help", value="Prints hunger game commands help", inline=False)
         await ctx.send(embed=embed)
 
     # Prints a link to the source code on github
@@ -82,7 +80,7 @@ class Utils(commands.Cog):
         
         # ???????????????????
         print("signing off...")
-        wipe()
+        # wipe()
         await self.bot.logout()
         for task in asyncio.Task.all_tasks():
             task.cancel()

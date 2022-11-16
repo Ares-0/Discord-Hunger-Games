@@ -5,9 +5,6 @@ import logging
 
 import bot_info # this file is local to my computer and has my token and username. Manually enter yours below.
 
-# HG Stuff
-from hg_bot import process_reaction
-
 
 # Import this from bot_info or enter it yourself if this was from github.
 TOKEN = bot_info.TOKEN
@@ -42,17 +39,6 @@ async def on_message(message):
 		await message.channel.send("hello!")
 
 	await bot.process_commands(message)
-
-@bot.event
-async def on_reaction_add(reaction, user):
-	if(user == bot.user):		# if bot is reacting, ignore
-		return
-
-	if(reaction.message.author.id != bot.user.id):	# if message isn't bot message, ignore
-		return
-	
-	if(reaction.message.channel.id in HG_CHANNEL):		# if message is in HG channel
-		process_reaction(reaction.message.embeds[0].title, user)
 
 @bot.event
 async def on_command_error(ctx, error):
