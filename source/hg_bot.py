@@ -442,6 +442,7 @@ class Game:
 
 	def import_champions(self):
 		imported = 0
+		self.champions.reset()
 
 		f = open(io_dir / "cast_in.txt", "r")
 		
