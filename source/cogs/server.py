@@ -113,5 +113,5 @@ def get_count_file():
         weights[i] = int(a.split(".")[0])
     return str(io_dir / random.choices(count_files, weights, k=1)[0])
 
-def setup(bot):
-    bot.add_cog(Server(bot))
+async def setup(bot):
+    await bot.add_cog(Server(bot))

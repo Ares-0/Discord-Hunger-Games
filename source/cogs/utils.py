@@ -154,6 +154,6 @@ async def getset(key, ctx, *args):
 			await ctx.send(data.get(key))
 
 data = Data()
-def setup(bot):
-    bot.add_cog(Utils(bot))
+async def setup(bot):
+    await bot.add_cog(Utils(bot))
     data.read()

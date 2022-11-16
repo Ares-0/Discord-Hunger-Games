@@ -207,5 +207,5 @@ async def check_gm(ctx):
         await ctx.message.add_reaction(emoji)
         return False
 
-def setup(bot):
-    bot.add_cog(Games(bot))
+async def setup(bot):
+    await bot.add_cog(Games(bot))
