@@ -3,12 +3,14 @@ import discord
 import os
 import random
 import re
+import logging
 
 from pathlib import Path
 from discord.ext import commands
 from cogs.utils import report_error, getset, try_react
 
 io_dir = Path(os.path.abspath(__file__)).parent / "../../io"
+logger = logging.getLogger('discord')
 
 class Server(commands.Cog):
     def __init__(self, bot):
@@ -23,17 +25,17 @@ class Server(commands.Cog):
             vc = None
             message = "Generic VC exception occured"	# generic
             try:	# this often doesn't complete still
-                out = "connecting to \"" + str(voice_channel.name) + "\" in \"" + str(voice_channel.guild.name) + "\"..."
-                print(out, flush=True, end='')
+                out = f"connecting to \"{voice_channel.name}\" in \"{voice_channel.guild.name}\"..."
+                logger.info(out)
                 # vc = await voice_channel.connect(timeout=5.0)
                 vc = await asyncio.wait_for(voice_channel.connect(timeout=5.0), 10.0)
             except asyncio.TimeoutError:
-                print("timed out")
+                logger.error("timed out")
                 message = "TimeoutError"
                 await ctx.send("I timed out, try trying again (no promises)")
                 for voice in self.bot.voice_clients:
                     if(voice.server == ctx.message.server):
-                        print(f"leaving {voice.channel.name}")
+                        logger.info(f"leaving {voice.channel.name}")
                         await voice.disconnect()
             except discord.ClientException:
                 print("Am I already in a channel? If not, try again")
@@ -50,7 +52,7 @@ class Server(commands.Cog):
                 await report_error(self.bot, message)
                 return
             
-            print("done")
+            logger.info("done connecting")
             await try_react(ctx, '✅')
             file = get_count_file()
             try:
@@ -66,6 +68,7 @@ class Server(commands.Cog):
             while vc.is_playing():
                 await asyncio.sleep(0.1)
             await vc.disconnect()
+            logger.info("done disconnecting")
         else:
             await ctx.send("You are not in a voice channel.")
     
