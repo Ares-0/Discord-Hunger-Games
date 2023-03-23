@@ -54,5 +54,5 @@ class Greetings(commands.Cog):
                     data = io.BytesIO(await resp.read())
                     await ctx.send(file=discord.File(data, 'cool_image.png'))
 
-def setup(bot):
-    bot.add_cog(Greetings(bot))
+async def setup(bot):
+    await bot.add_cog(Greetings(bot))

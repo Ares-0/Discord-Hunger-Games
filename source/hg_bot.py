@@ -10,6 +10,7 @@ import os
 import json
 import math
 import configparser
+from datetime import datetime as time
 from PIL import Image
 from pathlib import Path
 
@@ -415,6 +416,7 @@ class Game:
 		print("setting up new game")
 		self.import_champions()
 		self.import_events()
+		self.start = time.now()
 
 	def reset(self):
 		"""
@@ -442,7 +444,7 @@ class Game:
 
 	def import_champions(self):
 		imported = 0
-		self.champions.reset()
+		self.champions.clear()
 
 		f = open(io_dir / "cast_in.txt", "r")
 		

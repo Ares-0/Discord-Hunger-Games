@@ -11,17 +11,11 @@ TOKEN = bot_info.TOKEN
 ME = bot_info.OWNER
 HG_CHANNEL = bot_info.HG_CHANNEL
 
-bot = commands.Bot(command_prefix='~', case_insensitive=True)
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='~', case_insensitive=True, intents=intents)
 bot.remove_command('help')
-logging.basicConfig(level=logging.INFO)
-
-
-
-
-
-
-
-# Keeping events in this file for now?
+# logging.basicConfig(level=logging.INFO)
 
 # async def status_task():
 # 	while True:
@@ -51,16 +45,18 @@ async def on_command_error(ctx, error):
 async def on_ready():
 	print("Discord.py version: ", end=' ')
 	print(discord.__version__)
+	#client.loop.create_task(status_task())
+
+	await bot.load_extension("cogs.test")
+	await bot.load_extension("cogs.utils")
+	await bot.load_extension("cogs.server")
+	await bot.load_extension("cogs.games")
+	await bot.load_extension("cogs.personal")
+
+	await bot.change_presence(activity=discord.Game(name="with simulations"))
 	print('Logged in as', end=' ')
 	print(bot.user.name)
 	print(bot.user.id)
 	print('------')
-	await bot.change_presence(activity=discord.Game(name="with simulations"))
-	#client.loop.create_task(status_task())
-	bot.load_extension("cogs.test")
-	bot.load_extension("cogs.utils")
-	bot.load_extension("cogs.server")
-	bot.load_extension("cogs.games")
-	bot.load_extension("cogs.personal")
 
 bot.run(TOKEN)

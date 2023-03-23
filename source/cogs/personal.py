@@ -56,5 +56,5 @@ def extract_emojis(message):
         final.append(x)
     return final
 
-def setup(bot):
-    bot.add_cog(Personal(bot))
+async def setup(bot):
+    await bot.add_cog(Personal(bot))

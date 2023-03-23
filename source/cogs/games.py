@@ -135,7 +135,7 @@ class Games(commands.Cog):
                     emoji = '❌'
                     await ctx.message.add_reaction(emoji)
                     await ctx.send("File save error, yell at Ares")
-                os.rename(io_dir / "tmp.txt", io_dir / "cast_in.txt")
+                os.rename(io_dir / "cast.txt", io_dir / "cast_in.txt")
             emoji = '✅'
             await ctx.message.add_reaction(emoji)
         else:
@@ -207,5 +207,5 @@ async def check_gm(ctx):
         await ctx.message.add_reaction(emoji)
         return False
 
-def setup(bot):
-    bot.add_cog(Games(bot))
+async def setup(bot):
+    await bot.add_cog(Games(bot))
