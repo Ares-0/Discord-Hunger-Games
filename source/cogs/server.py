@@ -27,16 +27,16 @@ class Server(commands.Cog):
             try:	# this often doesn't complete still
                 out = f"connecting to \"{voice_channel.name}\" in \"{voice_channel.guild.name}\"..."
                 logger.info(out)
-                # vc = await voice_channel.connect(timeout=5.0)
-                vc = await asyncio.wait_for(voice_channel.connect(timeout=5.0), 10.0)
+                vc = await asyncio.wait_for(voice_channel.connect(timeout=5.0), 5.0)
             except asyncio.TimeoutError:
                 logger.error("timed out")
                 message = "TimeoutError"
                 await ctx.send("I timed out, try trying again (no promises)")
                 for voice in self.bot.voice_clients:
-                    if(voice.server == ctx.message.server):
+                    print(voice)
+                    if(voice.channel.guild == ctx.message.guild):
                         logger.info(f"leaving {voice.channel.name}")
-                        await voice.disconnect()
+                        await voice.disconnect(force=True)
             except discord.ClientException:
                 print("Am I already in a channel? If not, try again")
                 await ctx.send("I might already be counting somewhere")
