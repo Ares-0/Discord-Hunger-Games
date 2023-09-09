@@ -747,26 +747,27 @@ class Game:
 		# y(x) = 0.1*log2(x/10+1)+0.2
 		#self.fatal_chance = 0.1*math.log2(x/10+1)+0.2
 
+		# y(x) = x/b + c # b lower, fatal chance higher
 		# y(x) = x/200 + 0.2
-		fatal_chance = x/275 + 0.15
+		fatal_chance = x/250 + 0.15
 
 		# add day / night bias
-		bias = 0.03 #* random.random()
+		bias = 0.04 #* random.random()
 		if(self.current_type is EventType.Day):
 			fatal_chance += bias
 		if(self.current_type is EventType.Night):
 			fatal_chance -= bias
 		
 		# apply floor to value
-		fatal_chance = max(0.20, fatal_chance)
+		fatal_chance = max(0.25, fatal_chance)
 
 		# increase as rounds continue past the feast
 		if(self.current_day > self.params.FeastDay):
-			fatal_chance += 0.04*(self.stats.elapsed_turns - self.params.FeastDay*2+2)
+			fatal_chance += 0.04*(self.stats.elapsed_turns - self.params.FeastDay*2+1)
 		
 		# forget all that actually if it's a special round
 		if(self.current_type > EventType.Feast):
-			fatal_chance = 0.4
+			fatal_chance = 0.45
 
 		print(fatal_chance)
 		return fatal_chance
