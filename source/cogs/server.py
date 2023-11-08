@@ -1,4 +1,6 @@
 import asyncio
+import bot_info
+import datetime
 import discord
 import os
 import random
@@ -85,7 +87,16 @@ class Server(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         ctx = await self.bot.get_context(message)
-        # if message.author.nick == "Ares":
+
+        # debug
+        # if message.author.name == "masterofares":
+            # print(type(message.author) == discord.user.User) # if originated from a dm
+        
+        # if dm, potential suggestion box
+        if type(message.author) == discord.user.User and not message.author.bot:
+            await handle_suggestion_box(self, ctx, message)
+
+        # check content for potential pedantic bangs
         content = " " + message.content.lower()
         if " teppen" in content or " tepen" in content:
             await pedantic_bangs(ctx, message, "Teppen", 15)
@@ -93,9 +104,17 @@ class Server(commands.Cog):
         if " keijo" in content:
             await pedantic_bangs(ctx, message, "Keijo", 8)
 
+async def handle_suggestion_box(self, ctx, message):
+    channel = self.bot.get_channel(bot_info.ERROR_CHANNEL)
+
+    week_num = datetime.datetime.now().isocalendar()[1]
+    user_hash = hash(message.author.name + str(week_num))
+    suggestion_text = f"user hash: {user_hash}\nmessage: {message.content}"
+    await channel.send(suggestion_text)
+
 async def pedantic_bangs(ctx, message, text, num):
     # Dont correct every time
-    if random.random() < 0.8:
+    if random.random() < 0.9:
         return
 
     # Just skip links. Its fine (technically redundant now)
