@@ -223,6 +223,7 @@ class Event:
 			type = reg[1:-2]
 			
 			# his / her / their
+			# his / hers/ theirs
 			# he / she / they
 			# him / her / them
 			# himself / herself / themselves
@@ -241,6 +242,9 @@ class Event:
 				replace = options[g]
 			elif(type == "their"):
 				options = ["her", "his", "their"]
+				replace = options[g]
+			elif(type == "theirs"):
+				options = ["hers", "his", "theirs"]
 				replace = options[g]
 			elif(type == "themselves"):
 				options = ["herself", "himself", "themselves"]
@@ -560,9 +564,18 @@ class Game:
 	def import_json_of_events(self):
 		imported = 0
 		events_in = {}
+		# use this for occasional unit testing
+		dummy_champs = []
+		for x in range(10):
+			dummy_champs.append(Champion(f"Champ{x}", "", Gender(0), Status(0)))
+
 		print("Importing events from .json...")
 		with open(io_dir / "events.json", "r") as f:
-			events_in = json.load(f)
+			try:
+				events_in = json.load(f)
+			except Exception as e:
+				print(f"error reading file: {e}")
+				return
 
 		for type_str in events_in.keys():		# Day, night, etc
 			for result in events_in[type_str].keys():		# fatal, nonfatal
@@ -574,7 +587,9 @@ class Game:
 							if(type_str in t.name):
 								type = t
 								break
-						self.events.add_event(Event(type, int(numChampions), e["Killers"], e["Killed"], e["Text"]))
+						new_event: Event = Event(type, int(numChampions), e["Killers"], e["Killed"], e["Text"])
+						# print(new_event.get_final_text(dummy_champs)) # use this to check how events come out
+						self.events.add_event(new_event)
 						imported += 1
 		print(f"Imported {imported} events")
 
@@ -806,7 +821,7 @@ class Game:
 
 	# MESSAGE FUNCTIONS
 	async def print_event(self, event: Event, event_champs):
-		msg = event.get_final_text(event_champs)
+		msg = event.get_final_text(event_champs) + "\n"
 		print(msg)
 		color = 0x00ff00
 		if(len(event.killed) > 0):
